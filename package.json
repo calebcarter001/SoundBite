@@ -1,0 +1,21 @@
+{
+  "name": "soundbite",
+  "version": "0.1.0",
+  "description": "Local forensic audio recorder and Voice Memos clip manager.",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "package:mac": "electron-packager . SoundBite --platform=darwin --arch=x64 --out=dist --overwrite --prune=true --ignore='^/dist($|/)' --ignore='^/test($|/)'",
+    "open:mac": "open dist/SoundBite-darwin-x64/SoundBite.app",
+    "doctor": "node src/doctor.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.0.1",
+    "electron": "^42.3.3"
+  }
+}

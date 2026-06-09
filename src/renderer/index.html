@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundBite</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Forensic audio recorder</p>
+          <h1>SoundBite</h1>
+        </div>
+        <div id="recordingPill" class="pill idle">Idle</div>
+      </header>
+
+      <section class="status-grid" aria-label="Recorder status">
+        <div class="metric">
+          <span class="label">Selected devices</span>
+          <strong id="targetMetric">0</strong>
+        </div>
+        <div class="metric">
+          <span class="label">Recording now</span>
+          <strong id="sessionMetric">0</strong>
+        </div>
+        <div class="metric">
+          <span class="label">Latest snapshot</span>
+          <strong id="latestMetric">None</strong>
+        </div>
+      </section>
+
+      <section class="controls">
+        <button id="startButton" class="primary" type="button">Start Selected</button>
+        <button id="stopButton" type="button">Stop Recording</button>
+        <button id="refreshButton" type="button">Refresh Devices</button>
+        <button id="openFolderButton" type="button">Recordings</button>
+        <button id="openCasesButton" type="button">Cases</button>
+      </section>
+
+      <section class="device-list">
+        <div class="section-heading">
+          <h2>Recording Devices</h2>
+          <span id="deviceCount">0 selected</span>
+        </div>
+        <p id="streamAnalysisStatus" class="status-text">No stream analysis running</p>
+        <ul id="deviceList"></ul>
+        <details id="otherInputsPanel" class="other-inputs">
+          <summary>
+            <span>Other audio inputs macOS exposes</span>
+            <strong id="otherInputCount">0</strong>
+          </summary>
+          <ul id="otherDeviceList"></ul>
+        </details>
+      </section>
+
+      <details class="settings">
+        <summary>
+          <span>Recorder Settings</span>
+          <strong id="settingsStatus">30 min snapshots</strong>
+        </summary>
+        <div class="settings-grid">
+          <div class="field compact">
+            <label for="segmentMinutes">Snapshot minutes</label>
+            <input id="segmentMinutes" type="number" min="1" max="1440" step="1">
+          </div>
+          <div class="field compact">
+            <label for="silenceThreshold">Silence threshold dB</label>
+            <input id="silenceThreshold" type="number" min="-100" max="0" step="1">
+          </div>
+          <div class="field path-field">
+            <label for="recordingsDir">Recordings folder</label>
+            <div class="path-row">
+              <input id="recordingsDir" type="text" readonly>
+              <button id="chooseFolderButton" type="button">Choose</button>
+            </div>
+          </div>
+          <div class="toggles">
+            <label class="toggle">
+              <input id="autoRecordToggle" type="checkbox">
+              <span>Auto-record</span>
+            </label>
+            <label class="toggle">
+              <input id="discardSilenceToggle" type="checkbox">
+              <span>Discard silent snapshots</span>
+            </label>
+            <label class="toggle">
+              <input id="loginToggle" type="checkbox">
+              <span>Open at login</span>
+            </label>
+          </div>
+          <button id="saveButton" class="save" type="button">Save Setup</button>
+        </div>
+      </details>
+
+      <section class="memo-list">
+        <div class="section-heading">
+          <h2>Voice Memos</h2>
+          <span id="memoCount">0</span>
+        </div>
+        <p id="analysisStatus" class="status-text">No analysis running</p>
+        <ul id="memoList"></ul>
+      </section>
+
+      <details class="log-panel">
+        <summary>
+          <span>Recorder Log</span>
+          <span id="pidMetric">No processes</span>
+        </summary>
+        <pre id="logOutput"></pre>
+      </details>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

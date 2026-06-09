@@ -1,0 +1,13 @@
+.DS_Store
+node_modules/
+dist/
+out/
+coverage/
+npm-debug.log*
+
+# Audio captures are user data, not source.
+recordings/
+*.m4a
+*.wav
+*.mp3
+*.aac
