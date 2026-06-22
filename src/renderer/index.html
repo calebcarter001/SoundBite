@@ -13,103 +13,195 @@
           <p class="eyebrow">Forensic audio recorder</p>
           <h1>SoundBite</h1>
         </div>
-        <div id="recordingPill" class="pill idle">Idle</div>
+        <div class="topbar-right">
+          <button id="openFolderButton" class="tiny" type="button">Recordings</button>
+          <button id="openCasesButton" class="tiny" type="button">Cases</button>
+          <div id="recordingPill" class="pill idle">Idle</div>
+        </div>
       </header>
 
       <section class="status-grid" aria-label="Recorder status">
         <div class="metric">
           <span class="label">Selected devices</span>
           <strong id="targetMetric">0</strong>
+          <span id="inputMetricSub" class="sub">0 inputs</span>
         </div>
         <div class="metric">
           <span class="label">Recording now</span>
           <strong id="sessionMetric">0</strong>
+          <span id="uptimeMetricSub" class="sub">idle</span>
         </div>
         <div class="metric">
-          <span class="label">Latest snapshot</span>
-          <strong id="latestMetric">None</strong>
+          <span class="label">Captured today</span>
+          <strong id="capturedMetric">0 B</strong>
+          <span id="snapshotMetricSub" class="sub">0 snapshots</span>
+        </div>
+        <div id="diskMetricCard" class="metric">
+          <span class="label">Disk free</span>
+          <strong id="diskMetric">Unknown</strong>
+          <span id="diskMetricSub" class="sub">recordings volume</span>
+        </div>
+        <div class="metric">
+          <span class="label">Open cases</span>
+          <strong id="casesMetric">0</strong>
+          <span id="clipsMetricSub" class="sub">0 clips flagged</span>
         </div>
       </section>
+      <div id="statusAlert" class="status-alert" hidden></div>
 
-      <section class="controls">
-        <button id="startButton" class="primary" type="button">Start Selected</button>
-        <button id="stopButton" type="button">Stop Recording</button>
-        <button id="refreshButton" type="button">Refresh Devices</button>
-        <button id="openFolderButton" type="button">Recordings</button>
-        <button id="openCasesButton" type="button">Cases</button>
-      </section>
+      <nav class="tabs" aria-label="SoundBite views">
+        <button class="tab active" type="button" data-tab="mics">Mics <span id="micsTabCount" class="count">0</span></button>
+        <button class="tab" type="button" data-tab="history">History <span id="historyTabCount" class="count">0</span></button>
+        <button class="tab" type="button" data-tab="cases">Analysis &amp; Cases <span id="casesTabCount" class="count">0</span></button>
+        <button class="tab" type="button" data-tab="monitor">Monitor</button>
+        <button class="tab" type="button" data-tab="settings">Settings</button>
+      </nav>
 
-      <section class="device-list">
+      <section id="view-mics" class="view active">
         <div class="section-heading">
-          <h2>Recording Devices</h2>
-          <span id="deviceCount">0 selected</span>
+          <h2>Recording devices</h2>
+          <span id="deviceCount" class="meta">0 selected</span>
         </div>
-        <p id="streamAnalysisStatus" class="status-text">No stream analysis running</p>
-        <ul id="deviceList"></ul>
+        <div class="toolbar">
+          <button id="startButton" class="primary" type="button">Start Selected</button>
+          <button id="stopButton" class="danger" type="button">Stop Recording</button>
+          <button id="refreshButton" type="button">Refresh Devices</button>
+          <span id="streamAnalysisStatus" class="status-text">No stream analysis running</span>
+        </div>
+        <ul id="deviceList" class="device-grid"></ul>
+
         <details id="otherInputsPanel" class="other-inputs">
           <summary>
             <span>Other audio inputs macOS exposes</span>
             <strong id="otherInputCount">0</strong>
           </summary>
-          <ul id="otherDeviceList"></ul>
+          <ul id="otherDeviceList" class="device-grid secondary"></ul>
         </details>
       </section>
 
-      <details class="settings">
-        <summary>
-          <span>Recorder Settings</span>
-          <strong id="settingsStatus">30 min snapshots</strong>
-        </summary>
-        <div class="settings-grid">
-          <div class="field compact">
-            <label for="segmentMinutes">Snapshot minutes</label>
-            <input id="segmentMinutes" type="number" min="1" max="1440" step="1">
+      <section id="view-history" class="view">
+        <div class="section-heading">
+          <h2>Recording history</h2>
+          <span class="meta">Finalized snapshots across selected mics</span>
+        </div>
+        <div class="toolbar">
+          <div class="search"><input id="historySearch" type="search" placeholder="Search recordings"></div>
+          <select id="historyMicFilter"><option value="">All mics</option></select>
+          <button id="refreshLibraryButton" type="button">Refresh Library</button>
+        </div>
+        <div class="library">
+          <div class="rec-row head">
+            <span>Time / Mic</span>
+            <span>Activity</span>
+            <span>Size</span>
+            <span>Source</span>
+            <span></span>
           </div>
-          <div class="field compact">
-            <label for="silenceThreshold">Silence threshold dB</label>
-            <input id="silenceThreshold" type="number" min="-100" max="0" step="1">
+          <div id="recordingList"></div>
+        </div>
+        <div class="player">
+          <button id="playerButton" class="pp" type="button">Play</button>
+          <div>
+            <div id="playerTitle" class="ptitle">No recording selected</div>
+            <div id="playerSub" class="psub">Select a snapshot from history</div>
           </div>
-          <div class="field path-field">
-            <label for="recordingsDir">Recordings folder</label>
-            <div class="path-row">
-              <input id="recordingsDir" type="text" readonly>
-              <button id="chooseFolderButton" type="button">Choose</button>
+          <div class="scrub"><div id="playerProgress" class="done"></div></div>
+          <span id="playerTime" class="ptime">0:00 / 0:00</span>
+        </div>
+      </section>
+
+      <section id="view-cases" class="view">
+        <div class="note">
+          <b>Forensic note:</b> activity detection finds candidate moments and writes hashed clips with JSON sidecars. It does not prove a segment is important.
+        </div>
+        <div class="section-heading">
+          <h2>Analysis &amp; cases</h2>
+          <span class="meta">Voice Memos, stream snapshots, and generated case manifests</span>
+        </div>
+
+        <div class="split-grid">
+          <section class="panel">
+            <div class="section-heading compact">
+              <h2>Voice Memos</h2>
+              <span id="memoCount" class="meta">0</span>
             </div>
-          </div>
-          <div class="toggles">
+            <p id="analysisStatus" class="status-text">No analysis running</p>
+            <ul id="memoList" class="memo-list"></ul>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading compact">
+              <h2>Cases</h2>
+              <span id="caseCountLabel" class="meta">0</span>
+            </div>
+            <div id="caseList" class="case-grid"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-monitor" class="view">
+        <div class="section-heading">
+          <h2>Capture monitor</h2>
+          <span class="meta">Health across the current recording session</span>
+        </div>
+        <div id="monitorGrid" class="monitor-grid"></div>
+        <details class="log-panel">
+          <summary>
+            <span>Recorder Log</span>
+            <span id="pidMetric">No processes</span>
+          </summary>
+          <pre id="logOutput"></pre>
+        </details>
+      </section>
+
+      <section id="view-settings" class="view">
+        <div class="section-heading">
+          <h2>Recorder settings</h2>
+          <span id="settingsStatus" class="meta">30 min snapshots</span>
+        </div>
+        <div class="settings-grid">
+          <section class="panel">
+            <h2>Capture defaults</h2>
+            <div class="field">
+              <label for="segmentMinutes">Snapshot minutes</label>
+              <input id="segmentMinutes" type="number" min="1" max="1440" step="1">
+            </div>
+            <div class="field">
+              <label for="silenceThreshold">Silence threshold dB</label>
+              <input id="silenceThreshold" type="number" min="-100" max="0" step="1">
+            </div>
             <label class="toggle">
               <input id="autoRecordToggle" type="checkbox">
-              <span>Auto-record</span>
+              <span>Auto-record selected devices</span>
+            </label>
+            <label class="toggle">
+              <input id="exclusiveAudioToggle" type="checkbox">
+              <span>Require exclusive Core Audio lock while recording</span>
             </label>
             <label class="toggle">
               <input id="discardSilenceToggle" type="checkbox">
-              <span>Discard silent snapshots</span>
+              <span>Delete silent snapshots after JSON record</span>
             </label>
             <label class="toggle">
               <input id="loginToggle" type="checkbox">
               <span>Open at login</span>
             </label>
-          </div>
-          <button id="saveButton" class="save" type="button">Save Setup</button>
-        </div>
-      </details>
+          </section>
 
-      <section class="memo-list">
-        <div class="section-heading">
-          <h2>Voice Memos</h2>
-          <span id="memoCount">0</span>
+          <section class="panel">
+            <h2>Storage</h2>
+            <div class="field">
+              <label for="recordingsDir">Recordings folder</label>
+              <div class="path-row">
+                <input id="recordingsDir" type="text" readonly>
+                <button id="chooseFolderButton" type="button">Choose</button>
+              </div>
+            </div>
+            <p class="rec-sub">Recordings and cases remain outside git. Files already sent to a case are not cleaned up automatically.</p>
+            <button id="saveButton" class="primary" type="button">Save Setup</button>
+          </section>
         </div>
-        <p id="analysisStatus" class="status-text">No analysis running</p>
-        <ul id="memoList"></ul>
       </section>
-
-      <details class="log-panel">
-        <summary>
-          <span>Recorder Log</span>
-          <span id="pidMetric">No processes</span>
-        </summary>
-        <pre id="logOutput"></pre>
-      </details>
     </main>
 
     <script src="./renderer.js"></script>

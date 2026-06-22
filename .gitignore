@@ -5,6 +5,10 @@ out/
 coverage/
 npm-debug.log*
 
+# Generated native helper; rebuild with `npm run build:helper`.
+src/macos-audio-hog-wrapper
+*.dSYM/
+
 # Audio captures are user data, not source.
 recordings/
 *.m4a

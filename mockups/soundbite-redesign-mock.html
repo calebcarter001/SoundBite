@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SoundBite — Redesign Mock</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#18202a; --muted:#697382; --line:#d7dce3;
+  --line-soft:#e4e8ee; --teal:#0f766e; --teal-ink:#0b5650; --red:#b42318; --amber:#e9b949;
+  --green:#157f5b; --blue:#2563a8; --chip:#eef1f4; --shadow:0 1px 2px rgba(16,24,40,.05);
+  color-scheme:light;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);min-width:980px}
+button,input,select{font:inherit}
+button{height:34px;border:1px solid #c6ccd4;border-radius:8px;background:#fff;color:var(--ink);padding:0 12px;cursor:pointer;transition:.12s}
+button:hover{border-color:#6f7a89}
+button:disabled{cursor:not-allowed;opacity:.45}
+button.primary{border-color:var(--teal);background:var(--teal);color:#fff}
+button.primary:hover{background:var(--teal-ink)}
+button.danger{border-color:var(--red);color:var(--red)}
+button.danger:hover{background:#fdecea}
+button.tiny{height:28px;padding:0 9px;font-size:.8rem}
+input,select{height:34px;border:1px solid #c6ccd4;border-radius:8px;background:#fff;padding:0 10px}
+.app-shell{width:min(1320px,calc(100vw - 40px));margin:0 auto;padding:22px 0 48px}
+
+/* Topbar */
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:16px}
+.eyebrow{margin:0 0 3px;color:var(--muted);font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+h1{margin:0;font-size:1.9rem;line-height:1}
+h2{margin:0;font-size:1.02rem}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.pill{min-width:120px;border-radius:999px;padding:8px 14px;text-align:center;font-weight:800;font-size:.85rem}
+.pill.recording{background:var(--red);color:#fff}
+.pill.idle{background:#e5e8ed;color:#3b4654}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;margin-right:7px;vertical-align:middle;animation:blink 1.2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tab{height:38px;border:none;border-bottom:2px solid transparent;background:none;border-radius:0;color:var(--muted);font-weight:700;padding:0 14px}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--teal);border-bottom-color:var(--teal)}
+.tab .count{margin-left:6px;font-size:.72rem;background:var(--chip);color:var(--muted);border-radius:999px;padding:1px 7px;font-weight:800}
+.tab.active .count{background:#d8efeb;color:var(--teal-ink)}
+.view{display:none}
+.view.active{display:block}
+
+/* Status strip */
+.status-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+.metric{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:11px 13px;box-shadow:var(--shadow)}
+.metric .label{display:block;color:var(--muted);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.metric strong{display:block;font-size:1.35rem;margin-top:3px}
+.metric .sub{font-size:.74rem;color:var(--muted)}
+.metric.warn{border-color:var(--amber);background:#fffaef}
+.metric.warn strong{color:#8a6d12}
+
+/* Section heading */
+.section-heading{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 12px}
+.section-heading .meta{color:var(--muted);font-size:.82rem}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.toolbar .grow{flex:1}
+.search{position:relative;flex:1;max-width:340px}
+.search input{width:100%;padding-left:30px}
+.search::before{content:"⌕";position:absolute;left:10px;top:6px;color:var(--muted);font-size:1rem}
+
+/* Device cards */
+.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px}
+.device-item{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:15px;box-shadow:var(--shadow)}
+.device-item.target{border-color:var(--teal)}
+.device-item.recording{border-color:var(--red);box-shadow:0 0 0 3px rgba(180,35,24,.07)}
+.device-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.device-source{display:block;color:var(--muted);font-size:.72rem;font-weight:700}
+.device-name{font-size:1.05rem;font-weight:800;margin:2px 0}
+.device-raw{display:block;color:var(--muted);font-size:.74rem}
+.badge{border-radius:999px;padding:3px 10px;font-size:.72rem;font-weight:800;white-space:nowrap}
+.badge.recording{background:#fdecea;color:var(--red)}
+.badge.selected{background:#e0f2ee;color:var(--teal-ink)}
+.badge.available{background:var(--chip);color:var(--muted)}
+
+/* VU meter */
+.vu-wrap{margin:13px 0 4px}
+.vu-row{display:flex;align-items:center;gap:10px}
+.vu-label{font-size:.72rem;color:var(--muted);width:18px;font-weight:700}
+.vu-meter{position:relative;flex:1;height:12px;background:#eef1f4;border-radius:6px;overflow:hidden}
+.vu-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#1f9d6b 0%,#2faf57 55%,#e9b949 78%,#b42318 100%);width:42%;transition:width .08s linear}
+.vu-peak{position:absolute;top:0;height:100%;width:2px;background:#0b3a2e;left:62%}
+.vu-scale{display:flex;justify-content:space-between;font-size:.64rem;color:var(--muted);margin:3px 2px 0}
+.clip-led{font-size:.68rem;font-weight:800;color:var(--muted);margin-left:auto}
+.clip-led.hot{color:var(--red)}
+
+/* Mic control row */
+.mic-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+.ctrl{display:flex;flex-direction:column;gap:4px}
+.ctrl label{font-size:.7rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.ctrl .val{font-size:.78rem;font-weight:700}
+.slider{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#d8dee6;padding:0;width:100%}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--teal);cursor:pointer}
+.seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{flex:1;height:30px;border:none;border-radius:0;border-right:1px solid var(--line);font-size:.76rem}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--teal);color:#fff}
+.facts{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.76rem;color:var(--muted);margin:4px 0 12px}
+.facts .ok{color:var(--green);font-weight:700}
+.facts .bad{color:var(--red);font-weight:700}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.dot.green{background:var(--green)} .dot.amber{background:var(--amber)} .dot.red{background:var(--red)}
+.device-actions{display:flex;gap:8px;flex-wrap:wrap}
+.toggle{display:inline-flex;align-items:center;gap:7px;font-size:.82rem;font-weight:600;cursor:pointer}
+
+/* History / library */
+.library{display:grid;grid-template-columns:1fr;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);box-shadow:var(--shadow)}
+.rec-row{display:grid;grid-template-columns:18px 150px 1fr 92px 78px 96px auto;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line-soft);font-size:.82rem}
+.rec-row:last-child{border-bottom:none}
+.rec-row.head{background:#fbfcfd;color:var(--muted);font-weight:700;text-transform:uppercase;font-size:.68rem;letter-spacing:.03em}
+.rec-row:not(.head):hover{background:#fafbfc}
+.rec-name{font-weight:700}
+.rec-sub{color:var(--muted);font-size:.74rem}
+.wave{height:26px;display:flex;align-items:center;gap:1px;cursor:pointer}
+.wave i{display:block;width:2px;background:#9fb8b1;border-radius:1px}
+.wave.has-clip i.clip{background:var(--amber)}
+.tag{display:inline-block;background:var(--chip);color:#3b4654;border-radius:5px;padding:1px 7px;font-size:.7rem;font-weight:700;margin-right:4px}
+.tag.case{background:#e7f0fb;color:var(--blue)}
+.tag.silent{background:#f0eee9;color:#8a7a4a}
+.kebab{background:none;border:none;font-size:1.2rem;color:var(--muted);height:26px;width:26px;padding:0}
+.retain{font-size:.72rem;color:var(--muted)}
+
+/* Player bar */
+.player{position:sticky;bottom:0;margin-top:14px;background:#10202b;color:#e9eef2;border-radius:10px;padding:11px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 -2px 14px rgba(16,32,43,.18)}
+.player .pp{width:36px;height:36px;border-radius:50%;background:var(--teal);border:none;color:#fff;font-size:1rem}
+.player .ptitle{font-weight:700;font-size:.86rem}
+.player .psub{font-size:.72rem;color:#9fb4c0}
+.scrub{flex:1;height:6px;background:#26404e;border-radius:3px;position:relative;cursor:pointer}
+.scrub .done{position:absolute;left:0;top:0;height:100%;width:34%;background:var(--teal);border-radius:3px}
+.scrub .mk{position:absolute;top:-3px;height:12px;width:3px;background:var(--amber);border-radius:2px}
+.ptime{font-size:.74rem;color:#9fb4c0;font-variant-numeric:tabular-nums}
+
+/* Forensics / cases */
+.case-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px}
+.case-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden}
+.case-head{padding:13px 15px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.case-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;color:var(--muted)}
+.chain{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:800;color:var(--green)}
+.clip-list{padding:6px 0}
+.clip{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:9px 15px;border-bottom:1px solid var(--line-soft);font-size:.8rem}
+.clip:last-child{border-bottom:none}
+.clip .ts{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.74rem}
+.score{display:inline-block;min-width:34px;text-align:center;border-radius:6px;padding:2px 6px;font-weight:800;font-size:.72rem}
+.score.hi{background:#fdecea;color:var(--red)} .score.mid{background:#fdf4e3;color:#8a6d12} .score.lo{background:var(--chip);color:var(--muted)}
+.transcript{font-size:.78rem;color:#3b4654;font-style:italic;padding:2px 15px 9px;border-bottom:1px solid var(--line-soft)}
+
+/* Misc */
+.note{background:#fffaef;border:1px solid #f0e2bd;border-radius:8px;padding:10px 13px;font-size:.8rem;color:#6b5a1e;margin-bottom:16px}
+.note b{color:#5a4a14}
+.empty{padding:26px;text-align:center;color:var(--muted);font-size:.86rem}
+.spacer{height:8px}
+.flag{font-size:.66rem;font-weight:800;color:var(--teal-ink);background:#e0f2ee;border-radius:5px;padding:1px 6px;margin-left:6px}
+details.adv{margin-top:10px;border-top:1px solid var(--line-soft);padding-top:8px}
+details.adv summary{cursor:pointer;font-size:.78rem;color:var(--muted);font-weight:700}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.76rem;margin-top:8px}
+.kv span:nth-child(odd){color:var(--muted)}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:.72rem}
+</style>
+</head>
+<body>
+<main class="app-shell">
+
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Forensic audio recorder · redesign mock</p>
+      <h1>SoundBite</h1>
+    </div>
+    <div class="topbar-right">
+      <button class="tiny" onclick="alert('Mock: opens Recordings folder')">Recordings</button>
+      <button class="tiny" onclick="alert('Mock: opens Cases folder')">Cases</button>
+      <div class="pill recording"><span class="live-dot"></span>Recording · 2</div>
+    </div>
+  </header>
+
+  <!-- Always-visible status strip -->
+  <section class="status-grid">
+    <div class="metric"><span class="label">Mics selected</span><strong>3</strong><span class="sub">of 5 inputs</span></div>
+    <div class="metric"><span class="label">Recording now</span><strong>2</strong><span class="sub">14:23 elapsed</span></div>
+    <div class="metric"><span class="label">Captured today</span><strong>4.2 GB</strong><span class="sub">38 snapshots</span></div>
+    <div class="metric warn"><span class="label">Disk free</span><strong>21 GB</strong><span class="sub">~9h at current rate</span></div>
+    <div class="metric"><span class="label">Open cases</span><strong>3</strong><span class="sub">12 clips flagged</span></div>
+  </section>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="mics">Mics <span class="count">5</span></button>
+    <button class="tab" data-tab="history">History <span class="count">128</span></button>
+    <button class="tab" data-tab="cases">Analysis &amp; Cases <span class="count">3</span></button>
+    <button class="tab" data-tab="monitor">Monitor</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <!-- ============ MICS ============ -->
+  <section class="view active" id="view-mics">
+    <div class="section-heading">
+      <h2>Recording devices</h2>
+      <span class="meta">Live levels, per-mic gain, format, and health</span>
+    </div>
+
+    <div class="device-grid">
+
+      <!-- Card 1: recording, healthy -->
+      <div class="device-item recording target">
+        <div class="device-head">
+          <div>
+            <span class="device-source">Input 2 · USB</span>
+            <div class="device-name">Desk Mic — Lavalier <span class="flag">SOLO</span></div>
+            <span class="device-raw">USBAudio1.0 · Jieli</span>
+          </div>
+          <span class="badge recording">● Recording</span>
+        </div>
+
+        <div class="vu-wrap">
+          <div class="vu-row">
+            <span class="vu-label">L</span>
+            <div class="vu-meter"><div class="vu-fill" style="width:58%"></div><div class="vu-peak" style="left:67%"></div></div>
+            <span class="clip-led" id="led1">−12 dB</span>
+          </div>
+          <div class="vu-row" style="margin-top:5px">
+            <span class="vu-label">R</span>
+            <div class="vu-meter"><div class="vu-fill" style="width:54%"></div><div class="vu-peak" style="left:63%"></div></div>
+          </div>
+          <div class="vu-scale"><span>−60</span><span>−40</span><span>−20</span><span>−12</span><span>−6</span><span>0</span></div>
+        </div>
+
+        <div class="mic-controls">
+          <div class="ctrl">
+            <label>Input gain <span class="val" id="gainval1">+6 dB</span></label>
+            <input class="slider" type="range" min="-12" max="24" value="6" oninput="document.getElementById('gainval1').textContent=(this.value>0?'+':'')+this.value+' dB'">
+          </div>
+          <div class="ctrl">
+            <label>Monitor / mute</label>
+            <div class="seg"><button class="on">Live</button><button>Mute</button><button>Solo</button></div>
+          </div>
+          <div class="ctrl">
+            <label>Format</label>
+            <div class="seg"><button>m4a</button><button class="on">wav</button><button>flac</button></div>
+          </div>
+          <div class="ctrl">
+            <label>Sample rate</label>
+            <select><option>48 kHz / 24-bit</option><option>44.1 kHz / 16-bit</option><option>96 kHz / 24-bit</option></select>
+          </div>
+        </div>
+
+        <div class="facts">
+          <span><span class="dot green"></span>Healthy · permission OK</span>
+          <span class="ok">Battery 84%</span>
+          <span>Snapshot 30 min · WAV</span>
+          <span>Latest: 14-23.wav (52 MB)</span>
+        </div>
+
+        <div class="device-actions">
+          <button class="danger tiny">Stop</button>
+          <button class="tiny">Checkpoint clip</button>
+          <button class="tiny">Folder</button>
+          <button class="tiny">Analyze last 30 min</button>
+        </div>
+
+        <details class="adv"><summary>Naming, storage &amp; advanced</summary>
+          <div class="kv">
+            <span>Display name</span><span><input style="width:100%" value="Desk Mic — Lavalier"></span>
+            <span>Folder</span><span class="mono">~/SoundBite Recordings/desk-mic/</span>
+            <span>Noise gate</span><span>−45 dB · on</span>
+            <span>Auto-record</span><span>on when connected</span>
+          </div>
+        </details>
+      </div>
+
+      <!-- Card 2: recording but hot / clipping -->
+      <div class="device-item recording target">
+        <div class="device-head">
+          <div>
+            <span class="device-source">Input 3 · USB</span>
+            <div class="device-name">Boom Mic — Room</div>
+            <span class="device-raw">Scarlett Solo · Focusrite</span>
+          </div>
+          <span class="badge recording">● Recording</span>
+        </div>
+
+        <div class="vu-wrap">
+          <div class="vu-row">
+            <span class="vu-label">M</span>
+            <div class="vu-meter"><div class="vu-fill" style="width:96%"></div><div class="vu-peak" style="left:99%;background:#b42318"></div></div>
+            <span class="clip-led hot" id="led2">CLIP!</span>
+          </div>
+          <div class="vu-scale"><span>−60</span><span>−40</span><span>−20</span><span>−12</span><span>−6</span><span>0</span></div>
+        </div>
+
+        <div class="mic-controls">
+          <div class="ctrl">
+            <label>Input gain <span class="val">+18 dB</span></label>
+            <input class="slider" type="range" min="-12" max="24" value="18">
+          </div>
+          <div class="ctrl">
+            <label>Monitor / mute</label>
+            <div class="seg"><button class="on">Live</button><button>Mute</button><button>Solo</button></div>
+          </div>
+          <div class="ctrl">
+            <label>Format</label>
+            <div class="seg"><button class="on">m4a</button><button>wav</button><button>flac</button></div>
+          </div>
+          <div class="ctrl">
+            <label>Sample rate</label>
+            <select><option>44.1 kHz / 16-bit</option><option>48 kHz / 24-bit</option></select>
+          </div>
+        </div>
+
+        <div class="facts">
+          <span><span class="dot amber"></span>Levels too hot — lower gain</span>
+          <span>Battery unavailable</span>
+          <span>Snapshot 30 min · AAC</span>
+          <span class="bad">2 clipped snapshots today</span>
+        </div>
+
+        <div class="device-actions">
+          <button class="danger tiny">Stop</button>
+          <button class="tiny">Auto-set gain</button>
+          <button class="tiny">Folder</button>
+        </div>
+      </div>
+
+      <!-- Card 3: selected, idle -->
+      <div class="device-item target">
+        <div class="device-head">
+          <div>
+            <span class="device-source">Input 1 · Built-in</span>
+            <div class="device-name">MacBook Mic</div>
+            <span class="device-raw">Built-in Microphone</span>
+          </div>
+          <span class="badge selected">Selected</span>
+        </div>
+        <div class="vu-wrap">
+          <div class="vu-row">
+            <span class="vu-label">M</span>
+            <div class="vu-meter"><div class="vu-fill" style="width:8%"></div></div>
+            <span class="clip-led">−54 dB</span>
+          </div>
+          <div class="vu-scale"><span>−60</span><span>−40</span><span>−20</span><span>−12</span><span>−6</span><span>0</span></div>
+        </div>
+        <div class="facts">
+          <span><span class="dot green"></span>Ready</span>
+          <span>Backup mic</span>
+          <span>Snapshot 30 min · AAC</span>
+          <span>No file yet this session</span>
+        </div>
+        <div class="device-actions">
+          <button class="primary tiny">Record</button>
+          <button class="tiny">Folder</button>
+          <label class="toggle"><input type="checkbox" checked> Record this mic</label>
+        </div>
+      </div>
+
+      <!-- Card 4: available / not selected, warning -->
+      <div class="device-item">
+        <div class="device-head">
+          <div>
+            <span class="device-source">Input 4 · USB</span>
+            <div class="device-name">Headset Mic</div>
+            <span class="device-raw">Jabra Evolve2 · 1 of 2 duplicates</span>
+          </div>
+          <span class="badge available">Available</span>
+        </div>
+        <div class="facts" style="margin-top:12px">
+          <span><span class="dot red"></span>Mic permission denied</span>
+          <span>Battery 31%</span>
+          <span>Last seen 2d ago</span>
+        </div>
+        <div class="device-actions">
+          <button class="tiny">Grant permission…</button>
+          <label class="toggle"><input type="checkbox"> Record this mic</label>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section class="view" id="view-history">
+    <div class="section-heading">
+      <h2>Recording history</h2>
+      <span class="meta">Snapshots &amp; sessions across all mics · click a waveform to scrub</span>
+    </div>
+    <div class="toolbar">
+      <div class="search"><input placeholder="Search by name, mic, tag, or transcript…"></div>
+      <select class="tiny"><option>All mics</option><option>Desk Mic</option><option>Boom Mic</option></select>
+      <select class="tiny"><option>Any date</option><option>Today</option><option>Last 7 days</option></select>
+      <select class="tiny"><option>All</option><option>Has clips</option><option>Flagged</option><option>Silent</option></select>
+      <span class="grow"></span>
+      <button class="tiny">Export selected…</button>
+      <button class="tiny">Group by session</button>
+    </div>
+
+    <div class="library">
+      <div class="rec-row head">
+        <span><input type="checkbox"></span>
+        <span>Time / Mic</span>
+        <span>Waveform</span>
+        <span>Length</span>
+        <span>Size</span>
+        <span>Tags</span>
+        <span></span>
+      </div>
+
+      <div class="rec-row">
+        <span><input type="checkbox"></span>
+        <div><div class="rec-name">14:23 · Desk Mic</div><div class="rec-sub">2026-06-08 · WAV 48k</div></div>
+        <div class="wave has-clip" id="w1"></div>
+        <span>30:00</span>
+        <span>52 MB</span>
+        <span><span class="tag case">Case · 2 clips</span></span>
+        <button class="kebab" onclick="kebab()">⋯</button>
+      </div>
+
+      <div class="rec-row">
+        <span><input type="checkbox"></span>
+        <div><div class="rec-name">13:53 · Desk Mic</div><div class="rec-sub">2026-06-08 · WAV 48k</div></div>
+        <div class="wave" id="w2"></div>
+        <span>30:00</span>
+        <span>48 MB</span>
+        <span><span class="tag">interview</span></span>
+        <button class="kebab" onclick="kebab()">⋯</button>
+      </div>
+
+      <div class="rec-row">
+        <span><input type="checkbox"></span>
+        <div><div class="rec-name">13:53 · Boom Mic</div><div class="rec-sub">2026-06-08 · AAC 44k</div></div>
+        <div class="wave has-clip" id="w3"></div>
+        <span>30:00</span>
+        <span>21 MB</span>
+        <span><span class="tag silent">mostly silent</span></span>
+        <button class="kebab" onclick="kebab()">⋯</button>
+      </div>
+
+      <div class="rec-row">
+        <span><input type="checkbox"></span>
+        <div><div class="rec-name">13:23 · Desk Mic</div><div class="rec-sub">2026-06-08 · WAV 48k <span class="retain">· auto-delete in 6d</span></div></div>
+        <div class="wave" id="w4"></div>
+        <span>30:00</span>
+        <span>49 MB</span>
+        <span><span class="tag silent">silent · queued</span></span>
+        <button class="kebab" onclick="kebab()">⋯</button>
+      </div>
+    </div>
+
+    <!-- Sticky player -->
+    <div class="player">
+      <button class="pp" onclick="this.textContent=this.textContent==='▶'?'❚❚':'▶'">▶</button>
+      <div>
+        <div class="ptitle">14:23 · Desk Mic — Lavalier</div>
+        <div class="psub">WAV · 30:00 · 2 candidate clips marked</div>
+      </div>
+      <div class="scrub" onclick="scrubSeek(event,this)">
+        <div class="done"></div>
+        <div class="mk" style="left:28%"></div>
+        <div class="mk" style="left:71%"></div>
+      </div>
+      <span class="ptime">10:12 / 30:00</span>
+      <button class="tiny">＋ Mark clip</button>
+      <button class="tiny">Send to case</button>
+    </div>
+  </section>
+
+  <!-- ============ CASES ============ -->
+  <section class="view" id="view-cases">
+    <div class="note">
+      <b>What this is:</b> activity-detection finds <em>candidate</em> moments and writes hashed clips with JSON sidecars — it does not prove a segment matters. Review or transcribe before relying on it.
+    </div>
+    <div class="section-heading">
+      <h2>Analysis &amp; cases</h2>
+      <span class="meta">Candidate clips with chain-of-custody · source hashes &amp; offsets preserved</span>
+    </div>
+
+    <div class="case-grid">
+
+      <div class="case-card">
+        <div class="case-head">
+          <div>
+            <strong>desk-mic-interview</strong>
+            <div class="case-id">case · desk-mic-a91f4c2e · 3 sources</div>
+          </div>
+          <span class="chain"><span class="dot green"></span>Chain intact</span>
+        </div>
+        <div class="clip-list">
+          <div class="clip">
+            <div><strong>clip-001</strong> <span class="ts">04:12 → 04:48 · 36s</span></div>
+            <div><span class="score hi">87</span> <button class="tiny">▶</button></div>
+          </div>
+          <div class="transcript">“…can you confirm the date the shipment left the…”</div>
+          <div class="clip">
+            <div><strong>clip-002</strong> <span class="ts">11:50 → 12:10 · 20s</span></div>
+            <div><span class="score mid">54</span> <button class="tiny">▶</button></div>
+          </div>
+          <div class="clip">
+            <div><strong>clip-003</strong> <span class="ts">22:01 → 22:09 · 8s</span></div>
+            <div><span class="score lo">19</span> <button class="tiny">▶</button></div>
+          </div>
+        </div>
+        <div style="padding:11px 15px;display:flex;gap:8px;border-top:1px solid var(--line-soft)">
+          <button class="tiny">Open case folder</button>
+          <button class="tiny">Verify hashes</button>
+          <button class="tiny">Export manifest</button>
+        </div>
+      </div>
+
+      <div class="case-card">
+        <div class="case-head">
+          <div>
+            <strong>room-capture</strong>
+            <div class="case-id">case · boom-mic-7b2d · 1 source</div>
+          </div>
+          <span class="chain" style="color:#8a6d12"><span class="dot amber"></span>Needs review</span>
+        </div>
+        <div class="clip-list">
+          <div class="clip">
+            <div><strong>clip-001</strong> <span class="ts">02:30 → 02:41 · 11s</span></div>
+            <div><span class="score mid">48</span> <button class="tiny">▶</button></div>
+          </div>
+          <div class="clip">
+            <div><strong>clip-002</strong> <span class="ts">18:14 → 18:19 · 5s</span></div>
+            <div><span class="score lo">12</span> <button class="tiny">▶</button></div>
+          </div>
+        </div>
+        <div style="padding:11px 15px;display:flex;gap:8px;border-top:1px solid var(--line-soft)">
+          <button class="tiny">Transcribe all</button>
+          <button class="tiny">Verify hashes</button>
+        </div>
+      </div>
+
+      <div class="case-card">
+        <div class="case-head">
+          <div><strong>+ New analysis</strong><div class="case-id">pick a recording or run a live checkpoint</div></div>
+        </div>
+        <div class="empty">Drop a recording here, or choose a mic → “Analyze last N min”.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ MONITOR ============ -->
+  <section class="view" id="view-monitor">
+    <div class="section-heading"><h2>Capture monitor</h2><span class="meta">Real-time health across the recording session</span></div>
+    <div class="status-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="metric"><span class="label">Session uptime</span><strong>14:23</strong><span class="sub">started 14:08 · auto-record</span></div>
+      <div class="metric"><span class="label">Snapshots written</span><strong>38</strong><span class="sub">0 failed · 4 discarded (silent)</span></div>
+      <div class="metric warn"><span class="label">Write throughput</span><strong>3.1 MB/s</strong><span class="sub">disk full in ~9h</span></div>
+    </div>
+
+    <div class="library" style="margin-top:8px">
+      <div class="rec-row head" style="grid-template-columns:1fr 120px 110px 110px 1fr">
+        <span>Mic</span><span>State</span><span>Level</span><span>Permission</span><span>Last snapshot</span>
+      </div>
+      <div class="rec-row" style="grid-template-columns:1fr 120px 110px 110px 1fr">
+        <span class="rec-name">Desk Mic</span>
+        <span><span class="dot green"></span>Recording</span>
+        <span>−12 dB</span>
+        <span class="ok" style="color:var(--green);font-weight:700">Granted</span>
+        <span class="rec-sub">14:23 · ok</span>
+      </div>
+      <div class="rec-row" style="grid-template-columns:1fr 120px 110px 110px 1fr">
+        <span class="rec-name">Boom Mic</span>
+        <span><span class="dot amber"></span>Recording · hot</span>
+        <span class="bad" style="color:var(--red)">0 dB clip</span>
+        <span style="color:var(--green);font-weight:700">Granted</span>
+        <span class="rec-sub">14:23 · clipped</span>
+      </div>
+      <div class="rec-row" style="grid-template-columns:1fr 120px 110px 110px 1fr">
+        <span class="rec-name">Headset Mic</span>
+        <span><span class="dot red"></span>Blocked</span>
+        <span>—</span>
+        <span class="bad" style="color:var(--red);font-weight:700">Denied</span>
+        <span class="rec-sub">ffmpeg cannot capture</span>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px">
+      <b>Why a monitor tab:</b> today the app can look configured while ffmpeg silently fails (denied permission, clipping, full disk). This surfaces those failure modes the moment they happen.
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="view" id="view-settings">
+    <div class="section-heading"><h2>Recorder settings</h2><span class="meta">Defaults applied to newly selected mics</span></div>
+    <div class="device-grid" style="grid-template-columns:1fr 1fr">
+      <div class="device-item">
+        <strong>Capture defaults</strong>
+        <div class="mic-controls" style="border:none;grid-template-columns:1fr">
+          <div class="ctrl"><label>Snapshot length (min)</label><input type="number" value="30"></div>
+          <div class="ctrl"><label>Silence threshold (dB)</label><input type="number" value="-50"></div>
+          <div class="ctrl"><label>Default format</label><div class="seg"><button class="on">m4a</button><button>wav</button><button>flac</button></div></div>
+        </div>
+        <label class="toggle"><input type="checkbox" checked> Auto-record when a selected mic connects</label><div class="spacer"></div>
+        <label class="toggle"><input type="checkbox" checked> Discard silent snapshots (log to JSON)</label><div class="spacer"></div>
+        <label class="toggle"><input type="checkbox"> Open at login</label>
+      </div>
+      <div class="device-item">
+        <strong>Storage &amp; retention <span class="flag">NEW</span></strong>
+        <div class="mic-controls" style="border:none;grid-template-columns:1fr">
+          <div class="ctrl"><label>Recordings folder</label><input value="~/Documents/SoundBite Recordings" readonly></div>
+          <div class="ctrl"><label>Auto-delete silent snapshots after</label><select><option>Never</option><option selected>7 days</option><option>30 days</option></select></div>
+          <div class="ctrl"><label>Warn when disk free below</label><select><option>10 GB</option><option selected>25 GB</option></select></div>
+        </div>
+        <p class="rec-sub">Retention applies per-mic and is logged. Files in a case are never auto-deleted.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// Tab switching
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('view-'+t.dataset.tab).classList.add('active');
+}));
+
+// Build fake waveforms
+function buildWave(id,clipAt){
+  const el=document.getElementById(id); if(!el)return;
+  let h='';
+  for(let i=0;i<90;i++){
+    const base=8+Math.abs(Math.sin(i*0.4)*Math.cos(i*0.13))*18;
+    const isClip=clipAt&&clipAt.some(c=>i>=c[0]&&i<=c[1]);
+    h+=`<i class="${isClip?'clip':''}" style="height:${Math.round(base+(isClip?6:0))}px"></i>`;
+  }
+  el.innerHTML=h;
+}
+buildWave('w1',[[20,28],[60,66]]);
+buildWave('w2',null);
+buildWave('w3',[[40,44]]);
+buildWave('w4',null);
+
+// Animate live VU meters on the recording cards
+const fills=document.querySelectorAll('#view-mics .vu-fill');
+setInterval(()=>{
+  fills.forEach((f,i)=>{
+    if(f.parentElement.querySelector('.vu-peak')?.style.background==='rgb(180, 35, 24)'){
+      f.style.width=(88+Math.random()*10)+'%'; return; // hot mic stays high
+    }
+    const card=f.closest('.device-item');
+    if(!card.classList.contains('recording'))return;
+    f.style.width=(40+Math.random()*30)+'%';
+  });
+  const led=document.getElementById('led1');
+  if(led)led.textContent=(-(8+Math.floor(Math.random()*8)))+' dB';
+},220);
+
+function scrubSeek(e,el){
+  const r=el.getBoundingClientRect();
+  const p=Math.round((e.clientX-r.left)/r.width*100);
+  el.querySelector('.done').style.width=p+'%';
+}
+function kebab(){alert('Mock menu: Play · Rename · Tag · Send to case · Reveal in Finder · Export · Delete');}
+</script>
+</body>
+</html>

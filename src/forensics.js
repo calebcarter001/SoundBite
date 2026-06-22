@@ -15,6 +15,21 @@ const VOICE_MEMOS_ROOT = path.join(
 
 const DEFAULT_CASES_DIR = path.join(os.homedir(), 'Documents', 'SoundBite Cases');
 
+const ASTATS_FIELD_MAP = {
+  'Peak level dB': 'peakLevelDb',
+  'RMS level dB': 'rmsLevelDb',
+  'RMS peak dB': 'rmsPeakDb',
+  'RMS through dB': 'rmsTroughDb',
+  'Crest factor': 'crestFactor',
+  'Entropy': 'entropy',
+  'Dynamic range': 'dynamicRangeDb',
+  'Zero crossings rate': 'zeroCrossingRate',
+  'Mean difference': 'meanDifference',
+  'RMS difference': 'rmsDifference',
+  'Noise floor dB': 'noiseFloorDb',
+  'Flat factor': 'flatFactor'
+};
+
 function slugify(value) {
   return String(value || 'recording')
     .toLowerCase()
@@ -192,6 +207,216 @@ function parseSilenceEvents(stderr) {
   }
 
   return events.sort((a, b) => a.at - b.at);
+}
+
+function roundedNumber(value, places = 3) {
+  return Number.isFinite(value) ? Number(value.toFixed(places)) : null;
+}
+
+function parseFeatureNumber(value) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseAstats(stderr) {
+  const stats = {};
+  let inOverall = false;
+
+  for (const line of String(stderr || '').split(/\r?\n/)) {
+    if (/\]\s*Overall\s*$/.test(line)) {
+      inOverall = true;
+      continue;
+    }
+
+    const match = line.match(/\]\s*([^:]+):\s*(.+)$/);
+    if (!match) {
+      continue;
+    }
+
+    const field = ASTATS_FIELD_MAP[match[1].trim()];
+    if (!field) {
+      continue;
+    }
+
+    const parsed = parseFeatureNumber(match[2]);
+    if (parsed === null) {
+      continue;
+    }
+
+    if (inOverall || stats[field] === undefined) {
+      stats[field] = roundedNumber(parsed);
+    }
+  }
+
+  return stats;
+}
+
+function featureBucket(key, label) {
+  return { key, label };
+}
+
+function bucketRmsLevel(value) {
+  if (!Number.isFinite(value)) return featureBucket('unknown-amplitude', 'unknown amplitude');
+  if (value <= -55) return featureBucket('very-quiet', 'very quiet amplitude');
+  if (value <= -40) return featureBucket('quiet', 'quiet amplitude');
+  if (value <= -28) return featureBucket('moderate', 'moderate amplitude');
+  if (value <= -18) return featureBucket('loud', 'loud amplitude');
+  return featureBucket('hot', 'hot amplitude');
+}
+
+function bucketZeroCrossingRate(value) {
+  if (!Number.isFinite(value)) return featureBucket('unknown-texture', 'unknown texture');
+  if (value < 0.035) return featureBucket('low-texture', 'low texture');
+  if (value < 0.085) return featureBucket('mid-texture', 'mid texture');
+  return featureBucket('high-texture', 'high texture');
+}
+
+function bucketCrestFactor(value) {
+  if (!Number.isFinite(value)) return featureBucket('unknown-envelope', 'unknown envelope');
+  if (value < 2) return featureBucket('steady-envelope', 'steady envelope');
+  if (value < 5) return featureBucket('dynamic-envelope', 'dynamic envelope');
+  return featureBucket('spiky-envelope', 'spiky envelope');
+}
+
+function bucketDuration(value) {
+  if (!Number.isFinite(value)) return featureBucket('unknown-duration', 'unknown duration');
+  if (value < 3) return featureBucket('brief', 'brief');
+  if (value < 15) return featureBucket('short', 'short');
+  if (value < 60) return featureBucket('medium', 'medium');
+  return featureBucket('extended', 'extended');
+}
+
+function buildAudioFeatureProfile(stats = {}, segment = {}) {
+  const rms = parseFeatureNumber(stats.rmsLevelDb);
+  const zeroCrossingRate = parseFeatureNumber(stats.zeroCrossingRate);
+  const crestFactor = parseFeatureNumber(stats.crestFactor);
+  const loudness = bucketRmsLevel(rms);
+  const texture = bucketZeroCrossingRate(zeroCrossingRate);
+  const dynamics = bucketCrestFactor(crestFactor);
+  const duration = bucketDuration(parseFeatureNumber(segment.durationSeconds));
+
+  return {
+    algorithm: 'ffmpeg astats',
+    featureSignatureVersion: 1,
+    featureSignature: [loudness.key, texture.key, dynamics.key].join('|'),
+    rmsLevelDb: roundedNumber(rms),
+    peakLevelDb: roundedNumber(parseFeatureNumber(stats.peakLevelDb)),
+    rmsPeakDb: roundedNumber(parseFeatureNumber(stats.rmsPeakDb)),
+    rmsTroughDb: roundedNumber(parseFeatureNumber(stats.rmsTroughDb)),
+    crestFactor: roundedNumber(crestFactor),
+    entropy: roundedNumber(parseFeatureNumber(stats.entropy)),
+    dynamicRangeDb: roundedNumber(parseFeatureNumber(stats.dynamicRangeDb)),
+    zeroCrossingRate: roundedNumber(zeroCrossingRate, 6),
+    meanDifference: roundedNumber(parseFeatureNumber(stats.meanDifference), 6),
+    rmsDifference: roundedNumber(parseFeatureNumber(stats.rmsDifference), 6),
+    noiseFloorDb: roundedNumber(parseFeatureNumber(stats.noiseFloorDb)),
+    flatFactor: roundedNumber(parseFeatureNumber(stats.flatFactor)),
+    labels: {
+      loudness: loudness.label,
+      texture: texture.label,
+      dynamics: dynamics.label,
+      duration: duration.label
+    },
+    groupingFeatures: ['rmsLevelDb', 'zeroCrossingRate', 'crestFactor']
+  };
+}
+
+async function analyzeClipFeatures(clipPath, segment) {
+  const result = await run('ffmpeg', [
+    '-hide_banner',
+    '-nostdin',
+    '-i',
+    clipPath,
+    '-map',
+    '0:a:0',
+    '-af',
+    'astats=metadata=0:reset=0',
+    '-f',
+    'null',
+    '-'
+  ]);
+
+  return buildAudioFeatureProfile(parseAstats(result.stderr), segment);
+}
+
+function collectionLabel(features = {}) {
+  const labels = features.labels || {};
+  return [
+    labels.loudness,
+    labels.texture,
+    labels.dynamics
+  ].filter(Boolean).join(', ') || 'unclassified audio feature match';
+}
+
+function averageFeatureValue(clips, field, places = 3) {
+  const values = clips
+    .map((clip) => clip.audioFeatures?.[field])
+    .filter(Number.isFinite);
+
+  if (!values.length) {
+    return null;
+  }
+
+  return roundedNumber(values.reduce((total, value) => total + value, 0) / values.length, places);
+}
+
+function buildSimilarityCollections(clips) {
+  const groups = new Map();
+
+  for (const clip of clips) {
+    const signature = clip.audioFeatures?.featureSignature || 'unknown-amplitude|unknown-texture|unknown-envelope';
+    if (!groups.has(signature)) {
+      groups.set(signature, []);
+    }
+    groups.get(signature).push(clip);
+  }
+
+  return [...groups.entries()]
+    .sort((left, right) => {
+      const sizeDelta = right[1].length - left[1].length;
+      if (sizeDelta !== 0) {
+        return sizeDelta;
+      }
+
+      return (left[1][0]?.index || 0) - (right[1][0]?.index || 0);
+    })
+    .map(([signature, groupClips], index) => {
+      const collectionId = `collection-${String(index + 1).padStart(3, '0')}`;
+
+      for (const clip of groupClips) {
+        clip.collectionId = collectionId;
+      }
+
+      return {
+        collectionId,
+        label: collectionLabel(groupClips[0]?.audioFeatures),
+        reason: 'Grouped by matching coarse buckets for RMS amplitude, zero-crossing texture, and crest-factor envelope.',
+        featureSignature: signature,
+        clipIndexes: groupClips.map((clip) => clip.index),
+        clipCount: groupClips.length,
+        totalDurationSeconds: roundedNumber(groupClips.reduce((total, clip) => total + (clip.durationSeconds || 0), 0)),
+        averageFeatures: {
+          rmsLevelDb: averageFeatureValue(groupClips, 'rmsLevelDb'),
+          peakLevelDb: averageFeatureValue(groupClips, 'peakLevelDb'),
+          crestFactor: averageFeatureValue(groupClips, 'crestFactor'),
+          zeroCrossingRate: averageFeatureValue(groupClips, 'zeroCrossingRate', 6),
+          entropy: averageFeatureValue(groupClips, 'entropy')
+        },
+        sections: groupClips.map((clip) => ({
+          clipIndex: clip.index,
+          sourceIndex: clip.sourceIndex,
+          sourceClipIndex: clip.sourceClipIndex,
+          startSeconds: clip.startSeconds,
+          endSeconds: clip.endSeconds,
+          durationSeconds: clip.durationSeconds,
+          sourceStartAt: clip.sourceStartAt,
+          sourceEndAt: clip.sourceEndAt,
+          score: clip.score,
+          path: clip.path,
+          sha256: clip.sha256
+        }))
+      };
+    });
 }
 
 function buildActivitySegments(events, duration, options = {}) {
@@ -378,6 +603,104 @@ function caseIdForSources(sources, options = {}) {
   return `${slugify(label)}-${compactTimestamp(sources[0]?.recordingStartedAt)}-${digest}`;
 }
 
+function reportDuration(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value)) {
+    return 'unknown';
+  }
+
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const remainingSeconds = Math.round(value % 60);
+  const parts = [];
+
+  if (hours) parts.push(`${hours}h`);
+  if (minutes) parts.push(`${minutes}m`);
+  parts.push(`${remainingSeconds}s`);
+  return parts.join(' ');
+}
+
+function reportFeatureValue(value, suffix = '') {
+  return Number.isFinite(value) ? `${value}${suffix}` : 'unknown';
+}
+
+function buildCaseReportMarkdown(manifest) {
+  const lines = [
+    '# SoundBite Analysis Report',
+    '',
+    `Case: ${manifest.caseId}`,
+    `Created: ${manifest.createdAt}`,
+    `Recording length analyzed: ${reportDuration(manifest.report.recordingDurationSeconds)} (${manifest.report.recordingDurationSeconds}s across ${manifest.sources.length} source(s))`,
+    `Notable sections found: ${manifest.report.notableSectionCount} non-silent activity candidate(s)`,
+    `Similarity collections: ${manifest.report.collectionCount}`,
+    '',
+    'Risk note: these are audio activity and coarse feature matches only. They do not prove meaning, speaker identity, or legal relevance without review or transcription.',
+    '',
+    '## Sources',
+    ''
+  ];
+
+  for (const source of manifest.sources) {
+    lines.push(
+      `- Source ${manifest.sources.indexOf(source) + 1}: ${source.label}`,
+      `  - Duration: ${reportDuration(source.durationSeconds)} (${source.durationSeconds}s)`,
+      `  - SHA-256: ${source.sha256}`,
+      `  - Path: ${source.path}`
+    );
+  }
+
+  lines.push('', '## Similarity Collections', '');
+
+  if (!manifest.similarityCollections.length) {
+    lines.push('No non-silent activity clips were isolated for grouping.');
+  } else {
+    for (const collection of manifest.similarityCollections) {
+      lines.push(
+        `### ${collection.collectionId}: ${collection.label}`,
+        '',
+        `- Clips: ${collection.clipIndexes.join(', ')}`,
+        `- Total duration: ${reportDuration(collection.totalDurationSeconds)} (${collection.totalDurationSeconds}s)`,
+        `- Average RMS amplitude: ${reportFeatureValue(collection.averageFeatures.rmsLevelDb, ' dB')}`,
+        `- Average peak: ${reportFeatureValue(collection.averageFeatures.peakLevelDb, ' dB')}`,
+        `- Average zero-crossing rate: ${reportFeatureValue(collection.averageFeatures.zeroCrossingRate)}`,
+        `- Why grouped: ${collection.reason}`,
+        '',
+        '| Clip | Source | Offset | Duration | Score | SHA-256 |',
+        '| --- | --- | --- | --- | --- | --- |'
+      );
+
+      for (const section of collection.sections) {
+        lines.push(`| clip-${String(section.clipIndex).padStart(3, '0')} | ${section.sourceIndex} | ${section.startSeconds}s to ${section.endSeconds}s | ${section.durationSeconds}s | ${section.score} | ${section.sha256} |`);
+      }
+
+      lines.push('');
+    }
+  }
+
+  lines.push('## All Notable Sections', '');
+
+  if (!manifest.clips.length) {
+    lines.push('No non-silent activity candidates were detected.');
+  } else {
+    lines.push('| Clip | Collection | Source | Offset | Duration | Features | Clip path |');
+    lines.push('| --- | --- | --- | --- | --- | --- | --- |');
+
+    for (const clip of manifest.clips) {
+      const features = clip.audioFeatures?.labels || {};
+      const featureLabel = [
+        features.loudness,
+        features.texture,
+        features.dynamics
+      ].filter(Boolean).join(', ') || 'unknown features';
+
+      lines.push(`| clip-${String(clip.index).padStart(3, '0')} | ${clip.collectionId || 'unassigned'} | ${clip.sourceIndex} | ${clip.startSeconds}s to ${clip.endSeconds}s | ${clip.durationSeconds}s | ${featureLabel} | ${clip.path} |`);
+    }
+  }
+
+  lines.push('');
+  return `${lines.join('\n')}\n`;
+}
+
 async function analyzeAudioSources(inputSources, options = {}) {
   const sourceInputs = Array.isArray(inputSources) ? inputSources : [inputSources];
   const sources = [];
@@ -398,6 +721,7 @@ async function analyzeAudioSources(inputSources, options = {}) {
   fs.mkdirSync(clipsDir, { recursive: true });
 
   const clips = [];
+  const clipSidecars = [];
   for (const [sourceIndex, source] of sources.entries()) {
     const probe = {
       duration: source.durationSeconds,
@@ -425,6 +749,16 @@ async function analyzeAudioSources(inputSources, options = {}) {
       await extractClip(source.path, clipPath, segment);
 
       const clipHash = await sha256File(clipPath);
+      let audioFeatures = null;
+      try {
+        audioFeatures = await analyzeClipFeatures(clipPath, segment);
+      } catch (error) {
+        audioFeatures = {
+          ...buildAudioFeatureProfile({}, segment),
+          error: error?.message || 'Audio feature measurement failed'
+        };
+      }
+
       const sidecarPath = `${clipPath}.json`;
       const clip = {
         ...segment,
@@ -437,10 +771,11 @@ async function analyzeAudioSources(inputSources, options = {}) {
         sourceSha256: source.sha256,
         sourceStartAt: addSeconds(source.recordingStartedAt, segment.startSeconds),
         sourceEndAt: addSeconds(source.recordingStartedAt, segment.endSeconds),
-        sidecarPath
+        sidecarPath,
+        audioFeatures
       };
 
-      fs.writeFileSync(sidecarPath, `${JSON.stringify({
+      clipSidecars.push({
         source,
         clip,
         analysis: {
@@ -448,12 +783,19 @@ async function analyzeAudioSources(inputSources, options = {}) {
           noiseFloorDb: analysis.noiseFloorDb,
           minSilenceSeconds: analysis.minSilenceSeconds
         }
-      }, null, 2)}\n`);
+      });
 
       clips.push(clip);
     }
   }
 
+  const similarityCollections = buildSimilarityCollections(clips);
+  const collectionById = new Map(similarityCollections.map((collection) => [collection.collectionId, collection]));
+  const recordingDurationSeconds = roundedNumber(sources.reduce((total, source) => {
+    const duration = Number(source.durationSeconds);
+    return total + (Number.isFinite(duration) ? duration : 0);
+  }, 0));
+  const reportMarkdownPath = path.join(caseDir, 'report.md');
   const manifest = {
     caseId,
     caseDir,
@@ -468,9 +810,33 @@ async function analyzeAudioSources(inputSources, options = {}) {
       segmentCount: analyses.reduce((total, analysis) => total + analysis.segmentCount, 0),
       sources: analyses
     },
+    grouping: {
+      algorithm: 'coarse-audio-feature-buckets',
+      features: ['rmsLevelDb', 'zeroCrossingRate', 'crestFactor'],
+      collectionCount: similarityCollections.length,
+      note: 'Feature buckets are similarity aids only and require human review.'
+    },
+    report: {
+      markdownPath: reportMarkdownPath,
+      recordingDurationSeconds,
+      notableSectionCount: clips.length,
+      collectionCount: similarityCollections.length,
+      summary: `Analyzed ${recordingDurationSeconds}s across ${sources.length} source(s), isolated ${clips.length} non-silent activity candidate(s), and grouped them into ${similarityCollections.length} coarse audio-feature collection(s).`
+    },
+    similarityCollections,
     clips
   };
 
+  for (const sidecar of clipSidecars) {
+    fs.writeFileSync(sidecar.clip.sidecarPath, `${JSON.stringify({
+      source: sidecar.source,
+      clip: sidecar.clip,
+      collection: collectionById.get(sidecar.clip.collectionId) || null,
+      analysis: sidecar.analysis
+    }, null, 2)}\n`);
+  }
+
+  fs.writeFileSync(reportMarkdownPath, buildCaseReportMarkdown(manifest));
   fs.writeFileSync(path.join(caseDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
 }
@@ -513,8 +879,11 @@ module.exports = {
   analyzeAudioFile,
   analyzeAudioSources,
   analyzeVoiceMemo,
+  buildAudioFeatureProfile,
   buildActivitySegments,
+  buildSimilarityCollections,
   listVoiceMemos,
+  parseAstats,
   parseSilenceEvents,
   probeAudio,
   resolveExistingAudioPath,

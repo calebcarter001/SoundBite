@@ -5,8 +5,9 @@
   "main": "src/main.js",
   "private": true,
   "scripts": {
+    "build:helper": "clang -Wall -Wextra -O2 -framework CoreAudio -framework CoreFoundation src/macos-audio-hog-wrapper.c -o src/macos-audio-hog-wrapper",
     "start": "electron .",
-    "package:mac": "electron-packager . SoundBite --platform=darwin --arch=x64 --out=dist --overwrite --prune=true --ignore='^/dist($|/)' --ignore='^/test($|/)'",
+    "package:mac": "npm run build:helper && electron-packager . SoundBite --platform=darwin --arch=x64 --out=dist --overwrite --prune=true --ignore='^/dist($|/)' --ignore='^/test($|/)' --extra-resource=src/macos-audio-hog-wrapper",
     "open:mac": "open dist/SoundBite-darwin-x64/SoundBite.app",
     "doctor": "node src/doctor.js",
     "test": "node --test"

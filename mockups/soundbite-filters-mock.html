@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundBite Filters Mock</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --ink: #18202a;
+        --muted: #697382;
+        --line: #d7dce3;
+        --line-soft: #e4e8ee;
+        --teal: #0f766e;
+        --teal-ink: #0b5650;
+        --red: #b42318;
+        --amber: #d69e2e;
+        --green: #157f5b;
+        --blue: #2563a8;
+        --chip: #eef1f4;
+        --shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1040px;
+        background: var(--bg);
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        height: 32px;
+        border: 1px solid #c6ccd4;
+        border-radius: 8px;
+        background: #ffffff;
+        color: var(--ink);
+        padding: 0 11px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: #6f7a89;
+      }
+
+      button.primary,
+      .chip.active {
+        border-color: var(--teal);
+        background: var(--teal);
+        color: #ffffff;
+      }
+
+      input,
+      select {
+        width: 100%;
+        height: 34px;
+        border: 1px solid #c6ccd4;
+        border-radius: 8px;
+        background: #ffffff;
+        color: var(--ink);
+        padding: 0 10px;
+      }
+
+      input[type="checkbox"] {
+        width: 17px;
+        height: 17px;
+      }
+
+      input[type="range"] {
+        height: 5px;
+        padding: 0;
+        accent-color: var(--teal);
+      }
+
+      .app-shell {
+        width: min(1360px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 22px 0 48px;
+      }
+
+      .topbar,
+      .section-heading,
+      .panel-head,
+      .result-head,
+      .inline-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .topbar {
+        margin-bottom: 16px;
+      }
+
+      .eyebrow,
+      .label,
+      legend,
+      .filter-field span {
+        margin: 0 0 4px;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 1.85rem;
+        line-height: 1;
+      }
+
+      h2 {
+        font-size: 1rem;
+      }
+
+      h3 {
+        font-size: 0.92rem;
+      }
+
+      .meta,
+      .sub,
+      .result-meta,
+      .note {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .pill {
+        min-width: 140px;
+        border-radius: 999px;
+        background: var(--red);
+        color: #ffffff;
+        padding: 8px 14px;
+        text-align: center;
+        font-size: 0.84rem;
+        font-weight: 800;
+      }
+
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .metric,
+      .filter-panel,
+      .results-panel,
+      .case-card,
+      .result-row {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .metric {
+        padding: 11px 13px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 1.3rem;
+        margin-top: 3px;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 18px;
+      }
+
+      .tab {
+        height: 38px;
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .tab.active {
+        color: var(--teal);
+        border-bottom-color: var(--teal);
+      }
+
+      .filter-layout {
+        display: grid;
+        grid-template-columns: minmax(330px, 0.85fr) minmax(620px, 1.4fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .filter-panel,
+      .results-panel {
+        padding: 15px;
+      }
+
+      .filter-panel {
+        position: sticky;
+        top: 16px;
+      }
+
+      .panel-head {
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin: 10px 0 14px;
+      }
+
+      .chip {
+        height: 28px;
+        border-radius: 999px;
+        background: var(--chip);
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+
+      .reference-card,
+      .reference-builder,
+      .clip-inspector {
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        background: #fbfcfd;
+      }
+
+      .reference-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .reference-card {
+        display: grid;
+        gap: 7px;
+        padding: 9px;
+      }
+
+      .reference-card.active {
+        border-color: var(--teal);
+        background: #f2fbf9;
+      }
+
+      .reference-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 0.82rem;
+        font-weight: 850;
+      }
+
+      .reference-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .reference-controls button {
+        height: 26px;
+        font-size: 0.72rem;
+      }
+
+      fieldset {
+        min-width: 0;
+        margin: 0 0 14px;
+        padding: 12px;
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+      }
+
+      legend {
+        padding: 0 6px;
+      }
+
+      .filter-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .filter-field {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .filter-field.wide {
+        grid-column: 1 / -1;
+      }
+
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        font-size: 0.82rem;
+        font-weight: 650;
+      }
+
+      .range-line {
+        display: grid;
+        gap: 8px;
+      }
+
+      .range-meta {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+
+      .active-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 12px 0 14px;
+      }
+
+      .tag {
+        display: inline-block;
+        border-radius: 5px;
+        background: var(--chip);
+        color: #3b4654;
+        padding: 2px 7px;
+        font-size: 0.7rem;
+        font-weight: 800;
+      }
+
+      .tag.teal {
+        background: #e0f2ee;
+        color: var(--teal-ink);
+      }
+
+      .tag.blue {
+        background: #e7f0fb;
+        color: var(--blue);
+      }
+
+      .tag.amber {
+        background: #fff4d8;
+        color: #7a5a10;
+      }
+
+      .tag.red {
+        background: #fdecea;
+        color: var(--red);
+      }
+
+      .result-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .reference-builder {
+        display: grid;
+        grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
+        gap: 12px;
+        margin-bottom: 14px;
+        padding: 12px;
+      }
+
+      .clip-inspector {
+        padding: 10px;
+      }
+
+      .clip-timeline {
+        position: relative;
+        height: 54px;
+        margin: 10px 0;
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        background: repeating-linear-gradient(
+          90deg,
+          #eef1f4 0,
+          #eef1f4 1px,
+          #ffffff 1px,
+          #ffffff 34px
+        );
+        overflow: hidden;
+      }
+
+      .clip-region {
+        position: absolute;
+        top: 8px;
+        bottom: 8px;
+        left: 43%;
+        width: 11%;
+        border: 1px solid #b7791f;
+        border-radius: 6px;
+        background: rgba(214, 158, 46, 0.22);
+      }
+
+      .clip-region::before,
+      .clip-region::after {
+        position: absolute;
+        top: -18px;
+        color: #7a5a10;
+        font-size: 0.68rem;
+        font-weight: 800;
+      }
+
+      .clip-region::before {
+        content: "09:42:18";
+        left: -12px;
+      }
+
+      .clip-region::after {
+        content: "09:42:27";
+        right: -12px;
+      }
+
+      .reference-form {
+        display: grid;
+        gap: 10px;
+      }
+
+      .reference-form .filter-grid {
+        grid-template-columns: 1.2fr 0.8fr;
+      }
+
+      .scope-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .scope-card {
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 9px;
+      }
+
+      .result-row {
+        display: grid;
+        grid-template-columns: 150px minmax(260px, 1fr) 96px 120px;
+        gap: 12px;
+        align-items: center;
+        padding: 12px;
+      }
+
+      .result-name {
+        font-weight: 800;
+      }
+
+      .wave {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+        height: 28px;
+      }
+
+      .wave i {
+        display: block;
+        width: 3px;
+        border-radius: 2px;
+        background: #9fb8b1;
+      }
+
+      .wave i.hot {
+        background: var(--amber);
+      }
+
+      .score {
+        display: inline-block;
+        min-width: 38px;
+        border-radius: 6px;
+        background: var(--chip);
+        color: var(--muted);
+        padding: 3px 7px;
+        text-align: center;
+        font-size: 0.76rem;
+        font-weight: 900;
+      }
+
+      .score.high {
+        background: #fdecea;
+        color: var(--red);
+      }
+
+      .case-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .case-card {
+        padding: 12px;
+      }
+
+      .collection-row {
+        display: grid;
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .collection-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 0.78rem;
+      }
+
+      .sample-provenance {
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .review-queue {
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        background: #fbfcfd;
+        padding: 12px;
+        margin-bottom: 14px;
+      }
+
+      .review-row {
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 9px;
+        margin-top: 8px;
+      }
+
+      .review-row .reference-controls {
+        justify-content: flex-end;
+      }
+
+      .match-evidence {
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: #3b4654;
+      }
+
+      .library-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        background: #e0f2ee;
+        color: var(--teal-ink);
+        padding: 4px 8px;
+        font-size: 0.72rem;
+        font-weight: 850;
+      }
+
+      .footer-note {
+        margin-top: 14px;
+        border: 1px solid #f0e2bd;
+        border-radius: 8px;
+        background: #fffaef;
+        color: #6b5a1e;
+        padding: 10px 12px;
+        font-size: 0.78rem;
+      }
+
+      @media (max-width: 1080px) {
+        body {
+          min-width: 0;
+        }
+
+        .app-shell {
+          width: min(100vw - 24px, 900px);
+        }
+
+        .status-grid,
+        .filter-layout,
+        .case-grid,
+        .filter-grid,
+        .reference-builder,
+        .scope-grid,
+        .result-row {
+          grid-template-columns: 1fr;
+        }
+
+        .filter-panel {
+          position: static;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Forensic audio recorder - filter mock</p>
+          <h1>SoundBite</h1>
+        </div>
+        <div class="pill">Recording - 2</div>
+      </header>
+
+      <section class="status-grid" aria-label="Recorder status">
+        <div class="metric"><span class="label">Selected devices</span><strong>2</strong><span class="sub">USBAudio1.0, Caleb Mic</span></div>
+        <div class="metric"><span class="label">Captured today</span><strong>4.2 GB</strong><span class="sub">38 snapshots</span></div>
+        <div class="metric"><span class="label">Filtered now</span><strong id="metricFiltered">8</strong><span class="sub">sample matches</span></div>
+        <div class="metric"><span class="label">Open cases</span><strong>3</strong><span class="sub">12 clips flagged</span></div>
+        <div class="metric"><span class="label">Reference tags</span><strong id="metricReferences">6</strong><span class="sub">2 active, 2 matches pending review</span></div>
+      </section>
+
+      <nav class="tabs" aria-label="SoundBite views">
+        <button class="tab" type="button">Mics</button>
+        <button class="tab active" type="button">History</button>
+        <button class="tab active" type="button">Analysis &amp; Cases</button>
+        <button class="tab" type="button">Monitor</button>
+        <button class="tab" type="button">Settings</button>
+      </nav>
+
+      <section class="section-heading">
+        <div>
+          <h2>Available filters</h2>
+          <span class="meta">Mock for filtering snapshots, clips, collections, and case reports before we wire it into the app.</span>
+        </div>
+        <button id="resetButton" type="button">Reset mock</button>
+      </section>
+
+      <div class="filter-layout">
+        <aside class="filter-panel" aria-label="Filter controls">
+          <div class="panel-head">
+            <div>
+              <h2>Filter set</h2>
+              <span id="filterState" class="meta">Last 24h, analyzed, score 45+</span>
+            </div>
+            <button class="primary" type="button">Save</button>
+          </div>
+
+          <div class="chip-row" aria-label="Filter presets">
+            <button class="chip active" type="button">Last 24h</button>
+            <button class="chip" type="button">Today</button>
+            <button class="chip active" type="button">Analyzed</button>
+            <button class="chip" type="button">Needs review</button>
+            <button class="chip" type="button">In case</button>
+          </div>
+
+          <fieldset>
+            <legend>Find</legend>
+            <div class="filter-grid">
+              <label class="filter-field wide">
+                <span>Search</span>
+                <input type="search" value="thump" aria-label="Search">
+              </label>
+              <label class="filter-field">
+                <span>Source</span>
+                <select>
+                  <option>All selected mics</option>
+                  <option>USBAudio1.0</option>
+                  <option>Caleb's Microphone</option>
+                  <option>Voice Memos</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Case state</span>
+                <select>
+                  <option>Any state</option>
+                  <option>Not analyzed</option>
+                  <option>Analyzed, no case</option>
+                  <option>Attached to case</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Time and file</legend>
+            <div class="filter-grid">
+              <label class="filter-field">
+                <span>From</span>
+                <input type="date" value="2026-06-10">
+              </label>
+              <label class="filter-field">
+                <span>To</span>
+                <input type="date" value="2026-06-10">
+              </label>
+              <label class="filter-field">
+                <span>Time of day</span>
+                <select>
+                  <option>Any time</option>
+                  <option>Morning</option>
+                  <option>Afternoon</option>
+                  <option>Evening</option>
+                  <option>Overnight</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Format</span>
+                <select>
+                  <option>Any format</option>
+                  <option>M4A</option>
+                  <option>WAV</option>
+                  <option>FLAC</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Minimum size</span>
+                <input type="number" min="0" value="25">
+              </label>
+              <label class="filter-field">
+                <span>Duration</span>
+                <select>
+                  <option>Any duration</option>
+                  <option>Under 1 min</option>
+                  <option>1 to 10 min</option>
+                  <option>10 min+</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Audio traits</legend>
+            <div class="range-line">
+              <div class="range-meta"><span>Minimum score</span><strong id="scoreValue">45</strong></div>
+              <input id="scoreRange" type="range" min="0" max="100" step="5" value="45">
+            </div>
+            <div class="chip-row">
+              <button class="chip active" type="button">Percussive</button>
+              <button class="chip" type="button">Sustained</button>
+              <button class="chip" type="button">Very quiet</button>
+              <button class="chip active" type="button">Sharp transient</button>
+              <button class="chip" type="button">Low rumble</button>
+            </div>
+            <div class="filter-grid">
+              <label class="filter-field">
+                <span>Collection</span>
+                <select>
+                  <option>Any collection</option>
+                  <option>collection-001</option>
+                  <option>collection-002</option>
+                  <option>collection-003</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Loudness</span>
+                <select>
+                  <option>Any loudness</option>
+                  <option>loud</option>
+                  <option>medium</option>
+                  <option>quiet</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Sound reference library</legend>
+            <label class="filter-field wide">
+              <span>Detect saved reference</span>
+              <select>
+                <option>Any saved reference</option>
+                <option>Door knock - active</option>
+                <option>HVAC low hum - active</option>
+                <option>Metal scrape - paused</option>
+                <option>Footstep cluster - draft</option>
+              </select>
+            </label>
+            <div class="reference-list">
+              <article class="reference-card active">
+                <div class="reference-title">
+                  <span>Door knock</span>
+                  <span class="tag teal">active</span>
+                </div>
+                <div class="result-meta">v2 - 3 samples, 1 negative - threshold 72 - last run Jun 10, 10:00 AM - 1 match pending review</div>
+                <div class="sample-provenance">jun10 09:42 +18.4s 9f3a2c / jun08 22:10 +04.1s c71d90 / jun05 07:33 +11.0s 4be177</div>
+                <div class="reference-controls">
+                  <button type="button">Tune</button>
+                  <button type="button">Backfill</button>
+                  <button type="button">Pause</button>
+                  <button type="button">History</button>
+                </div>
+              </article>
+              <article class="reference-card active">
+                <div class="reference-title">
+                  <span>HVAC low hum</span>
+                  <span class="tag teal">active</span>
+                </div>
+                <div class="result-meta">v1 - 2 samples, 0 negatives - threshold 58 - last run Jun 10, 8:30 AM - excludes quiet overnight baseline</div>
+                <div class="sample-provenance">jun07 14:02 +09.7s e02b41 / jun06 03:15 +22.3s 88fa6d</div>
+                <div class="reference-controls">
+                  <button type="button">Tune</button>
+                  <button type="button">Backfill</button>
+                  <button type="button">Pause</button>
+                  <button type="button">History</button>
+                </div>
+              </article>
+              <article class="reference-card">
+                <div class="reference-title">
+                  <span>Metal scrape</span>
+                  <span class="tag amber">draft - manual only</span>
+                </div>
+                <div class="result-meta">v1 - 1 sample - locked out of auto-detect until a second sample is added</div>
+                <div class="sample-provenance">jun09 19:21 +07.9s b13c58</div>
+              </article>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Evidence controls</legend>
+            <label class="toggle"><input type="checkbox" checked> Has report</label>
+            <label class="toggle"><input type="checkbox" checked> Hash verified</label>
+            <label class="toggle"><input type="checkbox"> Hide silence-only snapshots</label>
+            <label class="toggle"><input type="checkbox"> Voice Memos only</label>
+          </fieldset>
+        </aside>
+
+        <section class="results-panel" aria-label="Filtered results">
+          <div class="panel-head">
+            <div>
+              <h2>Matched evidence</h2>
+              <span id="resultSummary" class="meta">8 snapshots, 3 cases, 5 collections</span>
+            </div>
+            <div class="inline-row">
+              <button type="button">Analyze visible</button>
+              <button type="button">Create case</button>
+            </div>
+          </div>
+
+          <div id="activeFilters" class="active-filters">
+            <span class="tag teal">Last 24h</span>
+            <span class="tag teal">Analyzed</span>
+            <span class="tag amber">Score 45+</span>
+            <span class="tag blue">Percussive</span>
+            <span class="tag blue">Sharp transient</span>
+            <span class="tag teal">Door knock detector</span>
+          </div>
+
+          <section class="reference-builder" aria-label="Create reusable sound reference">
+            <div class="clip-inspector">
+              <div class="result-head">
+                <div>
+                  <h3>Selected clip from finalized snapshot</h3>
+                  <span class="result-meta">Jun 10, 9:42 AM - USBAudio1.0 - 30 min snapshot</span>
+                </div>
+                <span class="tag amber">recognized</span>
+              </div>
+              <div class="clip-timeline" aria-label="Selected clip region inside thirty minute snapshot">
+                <div class="clip-region"></div>
+              </div>
+              <div class="active-filters">
+                <span class="tag blue">9.2s clip</span>
+                <span class="tag blue">percussive</span>
+                <span class="tag blue">sharp transient</span>
+                <span class="tag red">score 82</span>
+              </div>
+              <div class="footer-note">
+                This sample is evidence-linked back to its original snapshot. Saving a reference should preserve the source path, offset, hash, tag, and reviewer note.
+              </div>
+            </div>
+
+            <div class="reference-form">
+              <div class="result-head">
+                <div>
+                  <h3>Teach SoundBite this sound</h3>
+                  <span class="result-meta">User-labeled clip becomes a reusable detection reference.</span>
+                </div>
+                <span class="library-pill">new library item</span>
+              </div>
+              <div class="filter-grid">
+                <label class="filter-field">
+                  <span>Reference tag</span>
+                  <input id="referenceName" type="text" value="Door knock">
+                </label>
+                <label class="filter-field">
+                  <span>Match threshold</span>
+                  <select>
+                    <option>Strict - fewer false positives</option>
+                    <option>Balanced</option>
+                    <option>Loose - more candidates</option>
+                  </select>
+                </label>
+                <label class="filter-field wide">
+                  <span>Reviewer note</span>
+                  <input type="text" value="Recognized from 09:42 clip; use as recurring knock-like detector.">
+                </label>
+                <label class="filter-field">
+                  <span>Backfill range</span>
+                  <select id="backfillRange">
+                    <option value="0">Future snapshots only</option>
+                    <option value="7" selected>Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="all">All recordings</option>
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>Backfill cost</span>
+                  <span id="backfillEstimate" class="match-evidence" style="align-self:center">est. 266 snapshots, ~133 hr of audio</span>
+                </label>
+              </div>
+              <div class="scope-grid">
+                <label class="scope-card toggle"><input type="checkbox" checked> Use on future snapshots</label>
+                <label class="scope-card toggle"><input type="checkbox" checked> Search earlier recordings</label>
+                <label class="scope-card toggle"><input id="manualConfirm" type="checkbox" checked disabled> Require manual confirmation</label>
+                <label class="scope-card toggle"><input type="checkbox" checked> Group matches into cases</label>
+              </div>
+              <div class="result-meta" id="sampleCounter">1 positive sample, 0 negative samples - single-sample references save as draft and stay out of auto-detect</div>
+              <div class="inline-row">
+                <button id="saveReferenceButton" class="primary" type="button">Save as draft reference</button>
+                <button id="addSampleButton" type="button">Add another sample</button>
+                <button type="button">Search now</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="review-queue" aria-label="Match review queue">
+            <div class="result-head">
+              <div>
+                <h3>Match review queue</h3>
+                <span class="result-meta">Auto-detections wait here until a reviewer confirms or rejects them. Rejections are kept as negative samples to tighten the reference.</span>
+              </div>
+              <span id="pendingCount" class="tag amber">2 pending</span>
+            </div>
+            <div class="review-row" data-review>
+              <div>
+                <div class="result-name">Jun 10, 10:14 AM - USBAudio1.0</div>
+                <div class="match-evidence">Door knock v2 - match 78 vs threshold 72</div>
+                <div class="result-meta">snapshot offset +21:07, 6.1s region - hash verified</div>
+              </div>
+              <div class="reference-controls">
+                <button type="button">Play</button>
+                <button class="confirm-match" type="button">Confirm match</button>
+                <button class="reject-match" type="button">Reject - not this sound</button>
+              </div>
+            </div>
+            <div class="review-row" data-review>
+              <div>
+                <div class="result-name">Jun 10, 6:03 AM - USBAudio1.0</div>
+                <div class="match-evidence">HVAC low hum v1 - match 59 vs threshold 58 - borderline</div>
+                <div class="result-meta">snapshot offset +03:44, 41.2s region - hash verified</div>
+              </div>
+              <div class="reference-controls">
+                <button type="button">Play</button>
+                <button class="confirm-match" type="button">Confirm match</button>
+                <button class="reject-match" type="button">Reject - not this sound</button>
+              </div>
+            </div>
+          </section>
+
+          <div class="result-list">
+            <article class="result-row">
+              <div>
+                <div class="result-name">Jun 10, 9:42 AM</div>
+                <div class="result-meta">USBAudio1.0</div>
+              </div>
+              <div>
+                <div class="wave" aria-label="waveform preview">
+                  <i style="height:8px"></i><i style="height:12px"></i><i class="hot" style="height:25px"></i><i style="height:15px"></i><i style="height:10px"></i><i class="hot" style="height:24px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:13px"></i><i class="hot" style="height:26px"></i><i style="height:18px"></i><i style="height:8px"></i>
+                </div>
+                <div class="result-meta">percussive / sharp transient / medium loudness</div>
+              </div>
+              <span class="score high">82</span>
+              <span class="tag red">add reference</span>
+            </article>
+
+            <article class="result-row">
+              <div>
+                <div class="result-name">Jun 10, 8:17 AM</div>
+                <div class="result-meta">Caleb's Microphone</div>
+              </div>
+              <div>
+                <div class="wave" aria-label="waveform preview">
+                  <i style="height:7px"></i><i style="height:10px"></i><i style="height:14px"></i><i class="hot" style="height:21px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:9px"></i><i class="hot" style="height:23px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:16px"></i><i style="height:10px"></i>
+                </div>
+                <div class="result-meta">low rumble / uneven dynamics / assigned to collection-002</div>
+                <div class="match-evidence">HVAC low hum v1 - match 64 vs threshold 58 - confirmed by reviewer Jun 10</div>
+              </div>
+              <span class="score">56</span>
+              <span class="tag teal">HVAC confirmed</span>
+            </article>
+
+            <article class="result-row">
+              <div>
+                <div class="result-name">Jun 9, 11:56 PM</div>
+                <div class="result-meta">Voice Memo</div>
+              </div>
+              <div>
+                <div class="wave" aria-label="waveform preview">
+                  <i style="height:6px"></i><i style="height:8px"></i><i style="height:7px"></i><i class="hot" style="height:20px"></i><i style="height:12px"></i><i style="height:10px"></i><i style="height:11px"></i><i style="height:8px"></i><i class="hot" style="height:22px"></i><i style="height:13px"></i><i style="height:9px"></i><i style="height:7px"></i>
+                </div>
+                <div class="result-meta">quiet amplitude / short transient / no case yet</div>
+              </div>
+              <span class="score">47</span>
+              <span class="tag blue">new</span>
+            </article>
+          </div>
+
+          <div class="case-grid">
+            <article class="case-card">
+              <div class="result-head">
+                <div>
+                  <h3>case-20260610-0942</h3>
+                  <span class="result-meta">4 clips - 2 collections - report ready</span>
+                </div>
+                <span class="tag teal">hashes ok</span>
+              </div>
+              <div class="collection-row">
+                <div class="collection-item"><span>collection-001 - percussive impacts</span><span class="score high">82</span></div>
+                <div class="collection-item"><span>collection-003 - sharp transient group</span><span class="score">63</span></div>
+              </div>
+            </article>
+
+            <article class="case-card">
+              <div class="result-head">
+                <div>
+                  <h3>case-20260609-2356</h3>
+                  <span class="result-meta">3 clips - 1 collection - report ready</span>
+                </div>
+                <span class="tag amber">needs review</span>
+              </div>
+              <div class="collection-row">
+                <div class="collection-item"><span>collection-002 - low rumble cluster</span><span class="score">56</span></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="footer-note">
+            Risk: filters based on measured audio traits should stay labeled as coarse triage. They can narrow review work, but they cannot prove intent, source identity, or meaning without human review or additional analysis. Detector matches are model output, not findings: an unreviewed match proves nothing, and even a reviewer-confirmed match records a human judgment about similarity, not the cause or source of the sound. Reference versions matter - a match made by v1 is not re-validated when the reference is tuned to v2.
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const scoreRange = document.querySelector('#scoreRange');
+      const scoreValue = document.querySelector('#scoreValue');
+      const resetButton = document.querySelector('#resetButton');
+      const filterState = document.querySelector('#filterState');
+      const resultSummary = document.querySelector('#resultSummary');
+      const metricFiltered = document.querySelector('#metricFiltered');
+      const metricReferences = document.querySelector('#metricReferences');
+      const activeFilters = document.querySelector('#activeFilters');
+      const saveReferenceButton = document.querySelector('#saveReferenceButton');
+      const referenceName = document.querySelector('#referenceName');
+      const addSampleButton = document.querySelector('#addSampleButton');
+      const sampleCounter = document.querySelector('#sampleCounter');
+      const manualConfirm = document.querySelector('#manualConfirm');
+      const backfillRange = document.querySelector('#backfillRange');
+      const backfillEstimate = document.querySelector('#backfillEstimate');
+      const pendingCount = document.querySelector('#pendingCount');
+
+      let positiveSamples = 1;
+      let negativeSamples = 0;
+      let pendingReviews = 2;
+
+      const backfillEstimates = {
+        '0': 'no backfill - future snapshots only',
+        '7': 'est. 266 snapshots, ~133 hr of audio',
+        '30': 'est. 1,140 snapshots, ~570 hr of audio',
+        'all': 'est. 3,410 snapshots, ~1,705 hr of audio'
+      };
+
+      function syncSampleState() {
+        const draft = positiveSamples < 2;
+        sampleCounter.textContent = draft
+          ? `${positiveSamples} positive sample, ${negativeSamples} negative samples - single-sample references save as draft and stay out of auto-detect`
+          : `${positiveSamples} positive samples, ${negativeSamples} negative samples - eligible for active auto-detect`;
+        manualConfirm.checked = draft ? true : manualConfirm.checked;
+        manualConfirm.disabled = draft;
+        saveReferenceButton.textContent = draft ? 'Save as draft reference' : 'Save as reference';
+      }
+
+      function syncPending() {
+        pendingCount.textContent = `${pendingReviews} pending`;
+        pendingCount.className = pendingReviews > 0 ? 'tag amber' : 'tag teal';
+        if (pendingReviews === 0) pendingCount.textContent = 'queue clear';
+      }
+
+      function syncScore() {
+        scoreValue.textContent = scoreRange.value;
+        filterState.textContent = `Last 24h, analyzed, score ${scoreRange.value}+`;
+        activeFilters.querySelector('.tag.amber').textContent = `Score ${scoreRange.value}+`;
+      }
+
+      document.querySelectorAll('.chip').forEach((chip) => {
+        chip.addEventListener('click', () => chip.classList.toggle('active'));
+      });
+
+      scoreRange.addEventListener('input', syncScore);
+
+      saveReferenceButton.addEventListener('click', () => {
+        const label = referenceName.value.trim() || 'Untitled sound';
+        const draft = positiveSamples < 2;
+        saveReferenceButton.textContent = draft ? 'Saved as draft (manual review only)' : 'Reference saved';
+        resultSummary.textContent = draft
+          ? `8 snapshots, 3 cases, 7 references - ${label} saved as draft; add a second sample to enable auto-detect`
+          : `8 snapshots, 3 cases, 7 references - ${label} active for future snapshots and ${backfillEstimates[backfillRange.value]}`;
+        metricReferences.textContent = '7';
+        activeFilters.querySelector('[data-reference-tag]')?.remove();
+        const tagClass = draft ? 'tag amber' : 'tag teal';
+        const tagText = draft ? `${label} (draft)` : `${label} reference`;
+        activeFilters.insertAdjacentHTML('beforeend', `<span class="${tagClass}" data-reference-tag>${tagText}</span>`);
+      });
+
+      addSampleButton.addEventListener('click', () => {
+        positiveSamples += 1;
+        syncSampleState();
+      });
+
+      backfillRange.addEventListener('change', () => {
+        backfillEstimate.textContent = backfillEstimates[backfillRange.value];
+      });
+
+      document.querySelectorAll('[data-review]').forEach((row) => {
+        const evidence = row.querySelector('.match-evidence');
+        const controls = row.querySelector('.reference-controls');
+        row.querySelector('.confirm-match').addEventListener('click', () => {
+          controls.innerHTML = '<span class="tag teal">confirmed by reviewer</span>';
+          evidence.textContent += ' - confirmed';
+          pendingReviews -= 1;
+          syncPending();
+        });
+        row.querySelector('.reject-match').addEventListener('click', () => {
+          controls.innerHTML = '<span class="tag red">rejected - saved as negative sample</span>';
+          negativeSamples += 1;
+          pendingReviews -= 1;
+          syncPending();
+          syncSampleState();
+        });
+      });
+
+      resetButton.addEventListener('click', () => {
+        scoreRange.value = 45;
+        document.querySelectorAll('.chip').forEach((chip, index) => {
+          chip.classList.toggle('active', [0, 2, 5, 8].includes(index));
+        });
+        resultSummary.textContent = '8 snapshots, 3 cases, 5 collections';
+        metricFiltered.textContent = '8';
+        metricReferences.textContent = '6';
+        positiveSamples = 1;
+        negativeSamples = 0;
+        backfillRange.value = '7';
+        backfillEstimate.textContent = backfillEstimates['7'];
+        activeFilters.querySelector('[data-reference-tag]')?.remove();
+        syncScore();
+        syncSampleState();
+      });
+
+      syncSampleState();
+      syncPending();
+    </script>
+  </body>
+</html>

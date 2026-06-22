@@ -5,6 +5,7 @@ const {
   annotateAudioDevices,
   buildCheckpointFfmpegArgs,
   buildFfmpegArgs,
+  DeviceRecorder,
   findAudioDevice,
   matchesTargetDevice,
   parseMaxVolume,
@@ -82,6 +83,29 @@ test('defaults to 30-minute snapshots', () => {
   assert.equal(normalizeConfig().segmentSeconds, 1800);
 });
 
+test('keeps exclusive audio access opt-in because hog mode is device-dependent', () => {
+  assert.equal(DEFAULT_CONFIG.exclusiveAudioAccess, false);
+  assert.equal(normalizeConfig().exclusiveAudioAccess, false);
+  assert.equal(normalizeConfig({ exclusiveAudioAccess: true }).exclusiveAudioAccess, true);
+  assert.equal(normalizeConfig({ exclusiveAudioAccess: false }).exclusiveAudioAccess, false);
+});
+
+test('preserves original snapshots by default and migrates old silence deletion configs', () => {
+  assert.equal(DEFAULT_CONFIG.preserveOriginalRecordings, true);
+  assert.equal(DEFAULT_CONFIG.discardSilenceSnapshots, false);
+  assert.equal(normalizeConfig().preserveOriginalRecordings, true);
+  assert.equal(normalizeConfig().discardSilenceSnapshots, false);
+  assert.equal(normalizeConfig({ discardSilenceSnapshots: true }).discardSilenceSnapshots, false);
+
+  const explicitDeletion = normalizeConfig({
+    preserveOriginalRecordings: false,
+    discardSilenceSnapshots: true
+  });
+
+  assert.equal(explicitDeletion.preserveOriginalRecordings, false);
+  assert.equal(explicitDeletion.discardSilenceSnapshots, true);
+});
+
 test('auto-creates editable mic profiles for detected devices', () => {
   const devices = annotateAudioDevices([
     { index: 1, name: 'USBAudio1.0' },
@@ -135,6 +159,26 @@ test('builds checkpoint ffmpeg arguments without stopping the main recorder', ()
   assert.equal(args[args.indexOf('-t') + 1], '45');
   assert.equal(args[args.indexOf('-b:a') + 1], '96k');
   assert.equal(args.at(-1), '/tmp/soundbite-checkpoint.m4a');
+});
+
+test('treats a signaled recorder child as running until it exits', () => {
+  const recorder = new DeviceRecorder(
+    { index: 1, name: 'USBAudio1.0', displayName: 'USBAudio1.0', key: 'avfoundation-1-usbaudio1-0' },
+    { recordingsDir: '/tmp/soundbite-test' }
+  );
+
+  recorder.child = {
+    killed: true,
+    exitCode: null,
+    signalCode: null,
+    pid: 12345
+  };
+
+  assert.equal(recorder.isRunning(), true);
+
+  recorder.child.signalCode = 'SIGTERM';
+
+  assert.equal(recorder.isRunning(), false);
 });
 
 test('parses snapshot start time from recorder filenames', () => {

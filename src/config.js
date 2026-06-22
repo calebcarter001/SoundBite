@@ -1,6 +1,10 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const {
+  DEFAULT_DEVICE_SECURITY_POLICY,
+  normalizeDeviceSecurityPolicy
+} = require('./device-policy');
 
 const DEFAULT_CONFIG = Object.freeze({
   targetDeviceName: 'USBAudio1.0',
@@ -10,9 +14,12 @@ const DEFAULT_CONFIG = Object.freeze({
   segmentSeconds: 1800,
   audioBitrate: '128k',
   autoRecord: true,
-  discardSilenceSnapshots: true,
+  exclusiveAudioAccess: false,
+  preserveOriginalRecordings: true,
+  discardSilenceSnapshots: false,
   silenceMaxVolumeDb: -45,
   snapshotFinalizeGraceSeconds: 90,
+  deviceSecurityPolicy: DEFAULT_DEVICE_SECURITY_POLICY,
   micProfiles: {}
 });
 
@@ -105,6 +112,7 @@ function normalizeConfig(input = {}) {
   const segmentSeconds = Number.parseInt(merged.segmentSeconds, 10);
   const silenceMaxVolumeDb = Number.parseFloat(merged.silenceMaxVolumeDb);
   const snapshotFinalizeGraceSeconds = Number.parseInt(merged.snapshotFinalizeGraceSeconds, 10);
+  const preserveOriginalRecordings = merged.preserveOriginalRecordings !== false;
   const targetDeviceNames = Array.isArray(merged.targetDeviceNames)
     ? merged.targetDeviceNames
     : [merged.targetDeviceName || DEFAULT_CONFIG.targetDeviceName];
@@ -122,13 +130,16 @@ function normalizeConfig(input = {}) {
       : DEFAULT_CONFIG.segmentSeconds,
     audioBitrate: String(merged.audioBitrate || DEFAULT_CONFIG.audioBitrate).trim(),
     autoRecord: Boolean(merged.autoRecord),
-    discardSilenceSnapshots: merged.discardSilenceSnapshots !== false,
+    exclusiveAudioAccess: merged.exclusiveAudioAccess === true,
+    preserveOriginalRecordings,
+    discardSilenceSnapshots: preserveOriginalRecordings ? false : merged.discardSilenceSnapshots === true,
     silenceMaxVolumeDb: Number.isFinite(silenceMaxVolumeDb)
       ? Math.min(Math.max(silenceMaxVolumeDb, -100), 0)
       : DEFAULT_CONFIG.silenceMaxVolumeDb,
     snapshotFinalizeGraceSeconds: Number.isFinite(snapshotFinalizeGraceSeconds)
       ? Math.min(Math.max(snapshotFinalizeGraceSeconds, 10), 3600)
       : DEFAULT_CONFIG.snapshotFinalizeGraceSeconds,
+    deviceSecurityPolicy: normalizeDeviceSecurityPolicy(merged.deviceSecurityPolicy),
     micProfiles: normalizeMicProfiles(merged.micProfiles)
   };
 }

@@ -10,6 +10,13 @@ const {
   ensureMicProfilesForDevices,
   normalizeConfig
 } = require('./config');
+const {
+  annotateAudioDeviceSecurity,
+  deviceSecurityError,
+  listCoreAudioInputDevices,
+  listUsbControlDevices,
+  securitySummary
+} = require('./device-policy');
 
 function slugify(value) {
   const slug = String(value || 'device')
@@ -160,6 +167,62 @@ function buildCheckpointFfmpegArgs(device, outputPath, config, durationSeconds) 
     normalized.audioBitrate,
     outputPath
   ];
+}
+
+function resolveAudioHogWrapper() {
+  if (process.platform !== 'darwin') {
+    return null;
+  }
+
+  const candidates = [
+    process.resourcesPath ? path.join(process.resourcesPath, 'macos-audio-hog-wrapper') : null,
+    __dirname.includes('.asar') ? null : path.join(__dirname, 'macos-audio-hog-wrapper')
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch (_error) {
+      // Keep scanning. The packaged app keeps native helpers outside app.asar.
+    }
+  }
+
+  return null;
+}
+
+function ffmpegSpawnCommand(device, args, config) {
+  const normalized = normalizeConfig(config);
+  const ffmpegPath = resolveExecutable('ffmpeg');
+
+  if (!normalized.exclusiveAudioAccess || process.platform !== 'darwin') {
+    return {
+      command: ffmpegPath,
+      args,
+      display: `$ ${ffmpegPath} ${args.join(' ')}`
+    };
+  }
+
+  const wrapperPath = resolveAudioHogWrapper();
+  if (!wrapperPath) {
+    throw new Error('Exclusive audio access is enabled, but the macOS audio lock helper was not found. Run npm run build:helper and repackage SoundBite.');
+  }
+
+  const wrapperArgs = [
+    '--device-name',
+    device.name,
+    '--device-occurrence',
+    String(device.occurrence || 1),
+    '--',
+    ffmpegPath,
+    ...args
+  ];
+
+  return {
+    command: wrapperPath,
+    args: wrapperArgs,
+    display: `$ ${wrapperPath} --device-name "${device.name}" --device-occurrence ${device.occurrence || 1} -- ${ffmpegPath} ${args.join(' ')}`
+  };
 }
 
 function parseMaxVolume(output) {
@@ -319,6 +382,10 @@ function latestRecording(recordingsDir) {
   }
 }
 
+function isActiveChildProcess(child) {
+  return Boolean(child && child.exitCode === null && child.signalCode === null);
+}
+
 function listAvfoundationAudioDevices() {
   const result = spawnSync(resolveExecutable('ffmpeg'), ['-hide_banner', '-f', 'avfoundation', '-list_devices', 'true', '-i', ''], {
     encoding: 'utf8'
@@ -340,6 +407,7 @@ class DeviceRecorder extends EventEmitter {
     this.recentLog = [];
     this.cleanupTimer = null;
     this.cleanupInProgress = false;
+    this.stopPromise = null;
   }
 
   updateConfig(config) {
@@ -359,11 +427,11 @@ class DeviceRecorder extends EventEmitter {
   }
 
   isRunning() {
-    return Boolean(this.child && !this.child.killed);
+    return isActiveChildProcess(this.child);
   }
 
   start() {
-    if (this.isRunning()) {
+    if (this.isRunning() || this.stopping || this.stopPromise) {
       return this.getStatus();
     }
 
@@ -374,10 +442,20 @@ class DeviceRecorder extends EventEmitter {
     this.startedAt = new Date().toISOString();
     this.lastError = null;
     this.stopping = false;
-    const ffmpegPath = resolveExecutable('ffmpeg');
-    this.pushLog(`$ ${ffmpegPath} ${args.join(' ')}`);
+    let spawnCommand;
 
-    this.child = spawn(ffmpegPath, args, {
+    try {
+      spawnCommand = ffmpegSpawnCommand(this.device, args, this.config);
+    } catch (error) {
+      this.lastError = error.message;
+      this.startedAt = null;
+      this.emitStatus();
+      return this.getStatus();
+    }
+
+    this.pushLog(spawnCommand.display);
+
+    this.child = spawn(spawnCommand.command, spawnCommand.args, {
       stdio: ['pipe', 'ignore', 'pipe']
     });
 
@@ -407,16 +485,20 @@ class DeviceRecorder extends EventEmitter {
   }
 
   stop() {
-    if (!this.child) {
+    if (this.stopPromise) {
+      return this.stopPromise;
+    }
+
+    if (!this.child || !this.isRunning()) {
       return Promise.resolve(this.getStatus());
     }
 
     this.stopping = true;
     const child = this.child;
 
-    return new Promise((resolve) => {
+    this.stopPromise = new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        if (child.exitCode === null) {
+        if (isActiveChildProcess(child)) {
           child.kill('SIGTERM');
         }
       }, 3000);
@@ -436,7 +518,11 @@ class DeviceRecorder extends EventEmitter {
       } catch (_error) {
         child.kill('SIGTERM');
       }
+    }).finally(() => {
+      this.stopPromise = null;
     });
+
+    return this.stopPromise;
   }
 
   startCleanupTimer() {
@@ -565,20 +651,30 @@ class DeviceRecorder extends EventEmitter {
 }
 
 class RecordingManager extends EventEmitter {
-  constructor(config = DEFAULT_CONFIG) {
+  constructor(config = DEFAULT_CONFIG, options = {}) {
     super();
     this.config = normalizeConfig(config);
     this.sessions = new Map();
     this.devices = [];
     this.batteryReports = [];
     this.batteryReportsUpdatedAt = 0;
+    this.usbControlDevices = [];
+    this.auditLogger = options.auditLogger || null;
     this.lastError = null;
-    this.refreshDevices();
+    this.refreshDevices('startup');
+  }
+
+  audit(kind, details = {}, options = {}) {
+    if (!this.auditLogger) {
+      return null;
+    }
+
+    return this.auditLogger.log(kind, details, options);
   }
 
   updateConfig(config) {
     this.config = normalizeConfig(config);
-    this.refreshDevices();
+    this.refreshDevices('config-update');
 
     for (const session of this.sessions.values()) {
       session.updateConfig(this.config);
@@ -588,20 +684,36 @@ class RecordingManager extends EventEmitter {
     return this.getStatus();
   }
 
-  refreshDevices() {
+  refreshDevices(reason = 'refresh') {
     const now = Date.now();
     if (now - this.batteryReportsUpdatedAt > 60000) {
       this.batteryReports = listHidBatteryReports();
       this.batteryReportsUpdatedAt = now;
     }
 
-    const audioDevices = listAvfoundationAudioDevices();
+    const coreAudioInputDevices = listCoreAudioInputDevices();
+    const audioDevices = annotateAudioDeviceSecurity(listAvfoundationAudioDevices(), {
+      coreAudioInputDevices,
+      usbControlDevices: listUsbControlDevices(this.batteryReports),
+      policy: this.config.deviceSecurityPolicy
+    });
     const ensured = ensureMicProfilesForDevices(this.config, audioDevices);
     this.config = ensured.config;
+    this.usbControlDevices = listUsbControlDevices(this.batteryReports);
+
+    for (const device of audioDevices) {
+      const profile = this.config.micProfiles[device.key];
+      if (profile?.enabled && !device.security.allowed) {
+        this.config.micProfiles[device.key] = {
+          ...profile,
+          enabled: false
+        };
+      }
+    }
 
     this.devices = audioDevices.map((device) => ({
       ...device,
-      captureEnabled: matchesTargetDevice(device, this.config),
+      captureEnabled: device.security.allowed && matchesTargetDevice(device, this.config),
       recordingsDir: recordingDirForDevice(this.config, device),
       profile: profileForDevice(this.config, device),
       battery: batteryStatusForAudioDevice(device, this.batteryReports)
@@ -615,8 +727,49 @@ class RecordingManager extends EventEmitter {
     }
 
     this.stopOrphanedSessions(new Set(this.devices.map((device) => device.key)));
+    this.stopBlockedSessions(new Set(this.devices.filter((device) => device.security.allowed).map((device) => device.key)));
+    this.auditDeviceProbe(reason, coreAudioInputDevices);
 
     return this.devices;
+  }
+
+  auditDeviceProbe(reason, coreAudioInputDevices) {
+    const devices = this.devices.map((device) => ({
+      key: device.key,
+      index: device.index,
+      name: device.name,
+      displayName: device.displayName,
+      captureEnabled: device.captureEnabled,
+      security: {
+        allowed: device.security?.allowed || false,
+        reason: device.security?.reason || null,
+        detail: device.security?.detail || null,
+        transport: device.security?.transport || null,
+        controlInterfaceCount: device.security?.controlInterfaceCount || 0
+      }
+    }));
+    const summary = securitySummary(this.devices, this.usbControlDevices);
+    const signature = JSON.stringify({
+      devices: devices.map((device) => ({
+        key: device.key,
+        captureEnabled: device.captureEnabled,
+        allowed: device.security.allowed,
+        reason: device.security.reason,
+        transport: device.security.transport
+      })),
+      usbControlDeviceCount: summary.usbControlDeviceCount
+    });
+
+    this.audit('device-probe', {
+      reason,
+      coreAudioInputCount: coreAudioInputDevices.length,
+      avfoundationInputCount: this.devices.length,
+      summary,
+      devices
+    }, {
+      dedupeKey: `device-probe:${signature}`,
+      minIntervalMs: reason === 'target-selection' ? 60000 : 5000
+    });
   }
 
   stopOrphanedSessions(currentDeviceKeys) {
@@ -646,16 +799,43 @@ class RecordingManager extends EventEmitter {
     }
   }
 
+  stopBlockedSessions(allowedDeviceKeys) {
+    for (const [key, session] of this.sessions.entries()) {
+      if (allowedDeviceKeys.has(key)) {
+        continue;
+      }
+
+      if (!session.isRunning()) {
+        this.sessions.delete(key);
+        continue;
+      }
+
+      if (session.stopping) {
+        continue;
+      }
+
+      session.pushLog('Audio input is blocked by the SoundBite device security policy. Stopping recorder session.');
+      session.stop()
+        .catch((error) => {
+          session.lastError = `Failed to stop blocked recorder session: ${error.message}`;
+        })
+        .finally(() => {
+          this.sessions.delete(key);
+          this.emitStatus();
+        });
+    }
+  }
+
   listAudioDevices() {
-    return this.refreshDevices();
+    return this.refreshDevices('manual-list');
   }
 
   targetDevices() {
-    return this.refreshDevices().filter((device) => device.captureEnabled);
+    return this.refreshDevices('target-selection').filter((device) => device.captureEnabled);
   }
 
   deviceByKey(deviceKey) {
-    const devices = this.refreshDevices();
+    const devices = this.refreshDevices('device-lookup');
     const device = devices.find((candidate) => candidate.key === deviceKey);
 
     if (!device) {
@@ -741,6 +921,16 @@ class RecordingManager extends EventEmitter {
 
   captureCheckpoint(deviceKey, options = {}) {
     const device = this.deviceByKey(deviceKey);
+    try {
+      this.assertDeviceCanCapture(device);
+    } catch (error) {
+      this.audit('checkpoint-capture-attempt', {
+        deviceKey,
+        result: 'blocked',
+        error: error.message
+      });
+      throw error;
+    }
     const normalized = normalizeConfig({
       ...this.config,
       casesDir: options.casesDir || this.config.casesDir
@@ -752,11 +942,33 @@ class RecordingManager extends EventEmitter {
     const checkpointDir = path.join(normalized.casesDir, 'checkpoints', slugify(profile.folderName || profile.targetName || device.displayName));
     const outputPath = path.join(checkpointDir, `${slugify(profile.targetName || device.displayName)}-checkpoint-${timestamp}.m4a`);
     const args = buildCheckpointFfmpegArgs(device, outputPath, normalized, durationSeconds);
+    let spawnCommand;
+
+    try {
+      spawnCommand = ffmpegSpawnCommand(device, args, normalized);
+    } catch (error) {
+      this.audit('checkpoint-capture-complete', {
+        deviceKey,
+        deviceName: device.displayName || device.name,
+        outputPath,
+        result: 'error',
+        error: error.message
+      });
+      throw error;
+    }
+
+    this.audit('checkpoint-capture-attempt', {
+      deviceKey,
+      deviceName: device.displayName || device.name,
+      durationSeconds,
+      outputPath,
+      result: 'started'
+    });
 
     fs.mkdirSync(checkpointDir, { recursive: true });
 
     return new Promise((resolve, reject) => {
-      const child = spawn(resolveExecutable('ffmpeg'), args, {
+      const child = spawn(spawnCommand.command, spawnCommand.args, {
         stdio: ['ignore', 'ignore', 'pipe']
       });
       let stderr = '';
@@ -764,19 +976,52 @@ class RecordingManager extends EventEmitter {
       child.stderr.on('data', (chunk) => {
         stderr += chunk.toString();
       });
-      child.on('error', reject);
+      child.on('error', (error) => {
+        this.audit('checkpoint-capture-complete', {
+          deviceKey,
+          deviceName: device.displayName || device.name,
+          outputPath,
+          result: 'error',
+          error: error.message
+        });
+        reject(error);
+      });
       child.on('exit', (code) => {
         if (code !== 0) {
-          reject(new Error(`Checkpoint capture failed for ${device.displayName}: ${stderr.split(/\r?\n/).slice(-6).join(' ')}`));
+          const error = `Checkpoint capture failed for ${device.displayName}: ${stderr.split(/\r?\n/).slice(-6).join(' ')}`;
+          this.audit('checkpoint-capture-complete', {
+            deviceKey,
+            deviceName: device.displayName || device.name,
+            outputPath,
+            result: 'error',
+            error
+          });
+          reject(new Error(error));
           return;
         }
 
         const stat = fs.existsSync(outputPath) ? fs.statSync(outputPath) : null;
         if (!stat || stat.size === 0) {
-          reject(new Error(`Checkpoint capture created no audio for ${device.displayName}.`));
+          const error = `Checkpoint capture created no audio for ${device.displayName}.`;
+          this.audit('checkpoint-capture-complete', {
+            deviceKey,
+            deviceName: device.displayName || device.name,
+            outputPath,
+            result: 'error',
+            error
+          });
+          reject(new Error(error));
           return;
         }
 
+        this.audit('checkpoint-capture-complete', {
+          deviceKey,
+          deviceName: device.displayName || device.name,
+          outputPath,
+          result: 'complete',
+          bytes: stat.size,
+          durationSeconds
+        });
         resolve({
           path: outputPath,
           label: `${profile.targetName || device.displayName} checkpoint ${timestamp}`,
@@ -803,14 +1048,53 @@ class RecordingManager extends EventEmitter {
 
   startAll() {
     const devices = this.targetDevices();
+    const attemptDetails = {
+      requestedTargetCount: this.devices.filter((device) => device.captureEnabled).length,
+      runningCount: this.getStatus().runningCount,
+      devices: this.devices.map((device) => ({
+        key: device.key,
+        displayName: device.displayName || device.name,
+        captureEnabled: device.captureEnabled,
+        allowed: device.security?.allowed || false,
+        blockReason: device.security?.allowed ? null : device.security?.reason
+      }))
+    };
 
     if (!devices.length) {
-      this.lastError = 'No enabled audio inputs were found.';
+      const blockedInputs = this.devices
+        .filter((device) => device.security && !device.security.allowed)
+        .map((device) => `${device.displayName || device.name}: ${device.security.detail}`)
+        .join('; ');
+      const availableInputs = this.devices
+        .map((device) => device.displayName || device.name)
+        .filter(Boolean)
+        .join(', ');
+      this.lastError = blockedInputs
+        ? `No USB microphone inputs are allowed by the device policy. Blocked inputs: ${blockedInputs}`
+        : availableInputs
+        ? `No enabled audio inputs were found. macOS currently exposes: ${availableInputs}. Enable "Record this input" for the mic you want, then start recording.`
+        : 'No enabled audio inputs were found. macOS is not exposing any audio inputs.';
+      this.audit('recording-start-all-attempt', {
+        ...attemptDetails,
+        result: 'blocked',
+        error: this.lastError
+      }, {
+        dedupeKey: `recording-start-all-blocked:${this.lastError}`,
+        minIntervalMs: 60000
+      });
       this.emitStatus();
       return this.getStatus();
     }
 
     this.lastError = null;
+    this.audit('recording-start-all-attempt', {
+      ...attemptDetails,
+      result: 'starting',
+      targetDeviceKeys: devices.map((device) => device.key)
+    }, {
+      dedupeKey: `recording-start-all-starting:${devices.map((device) => device.key).join(',')}`,
+      minIntervalMs: 60000
+    });
 
     for (const device of devices) {
       this.startDevice(device.key, false);
@@ -818,6 +1102,16 @@ class RecordingManager extends EventEmitter {
 
     this.emitStatus();
     return this.getStatus();
+  }
+
+  assertDeviceCanCapture(device) {
+    if (!device.security?.allowed) {
+      throw new Error(deviceSecurityError(device));
+    }
+
+    if (!device.captureEnabled) {
+      throw new Error(`${device.displayName || device.name} is not enabled for recording. Enable it in SoundBite and save setup before capture.`);
+    }
   }
 
   startDevice(deviceKey, shouldRefresh = true) {
@@ -830,13 +1124,39 @@ class RecordingManager extends EventEmitter {
       return this.getStatus();
     }
 
+    try {
+      this.assertDeviceCanCapture(device);
+    } catch (error) {
+      this.lastError = error.message;
+      this.audit('recording-start-device-attempt', {
+        deviceKey,
+        deviceName: device.displayName || device.name,
+        result: 'blocked',
+        error: error.message
+      });
+      this.emitStatus();
+      return this.getStatus();
+    }
+
     const session = this.ensureSession(device);
 
     try {
       session.start();
       this.lastError = null;
+      this.audit('recording-start-device-attempt', {
+        deviceKey,
+        deviceName: device.displayName || device.name,
+        result: 'started',
+        pid: session.child?.pid || null
+      });
     } catch (error) {
       this.lastError = error.message;
+      this.audit('recording-start-device-attempt', {
+        deviceKey,
+        deviceName: device.displayName || device.name,
+        result: 'error',
+        error: error.message
+      });
     }
 
     this.emitStatus();
@@ -894,9 +1214,14 @@ class RecordingManager extends EventEmitter {
       segmentSeconds: this.config.segmentSeconds,
       audioBitrate: this.config.audioBitrate,
       autoRecord: this.config.autoRecord,
+      exclusiveAudioAccess: this.config.exclusiveAudioAccess,
+      preserveOriginalRecordings: this.config.preserveOriginalRecordings,
       discardSilenceSnapshots: this.config.discardSilenceSnapshots,
       silenceMaxVolumeDb: this.config.silenceMaxVolumeDb,
       snapshotFinalizeGraceSeconds: this.config.snapshotFinalizeGraceSeconds,
+      deviceSecurityPolicy: this.config.deviceSecurityPolicy,
+      securitySummary: securitySummary(this.devices, this.usbControlDevices),
+      auditLogPath: this.auditLogger?.filePath || null,
       recordingsDir: this.config.recordingsDir,
       casesDir: this.config.casesDir,
       micProfiles: this.config.micProfiles,
